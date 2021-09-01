@@ -27,9 +27,9 @@ def error(m):
     sys.exit(1)
 
 class Input:
-    def init(self):
+    def init(self, infile=None):
         self.init_constants()
-        self.init_form()
+        self.init_form(infile)
         self.init_teachers()
         self.init_rest()
         self.init_penalties()
@@ -204,102 +204,111 @@ class Input:
             return Cgen.startswith("LH 1 - English")
         return Cspec.startswith(Cgen)
 
-    def read_input(self, filename="input.csv"):
+    def read_input(self, infile=None):
+        if infile:
+            info(f"Opening {infile}")
+            f = open(infile, mode="r")
+        else: # use stdin
+            f = sys.stdin
+
         result = {}
         self.teachers_active = []
-        with open(filename, mode="r") as f:
-            reader = csv.DictReader(f)
-            n = 0
-            input_courses = [] # courses
-            for row in reader:
-                n += 1
-                if n == 1:
-                    # check courses when handling the first row
-                    columns = list(row.keys())
-                    for col in columns:
-                        if col.startswith("What courses would you like to teach?"):
-                            course = col.split("[")[1].split("]")[0]
-                            if course in self.COURSES_IGNORE:
-                                continue
-                            self.check_course(course)
-                            # problematic: Balboa Beginners 2
-                            input_courses.append(course)
-                    input_courses.append("Rhythm Pilots") # TODO
-                    info(f"Input courses (F): {sorted(input_courses)}")
-                    info(f"Input courses (C): {sorted(self.courses)}")
-                    # does not make sense (general vs. specific course names)
-                    #info(f"Input courses (diff): {set(self.courses)-set(input_courses)-set(self.COURSES_IGNORE)}")
-                # handle the input data
-                debug("")
-                name = self.translate_teacher_name(row["Who are you?"])
-                debug(f"Reading: name {name}")
-                d = {}
-                d["ncourses_ideal"] = int(row["How many courses would you ideally like to teach?"])
-                d["ncourses_max"] = int(row["How many courses are you able to teach at most?"])
-                slots = []
-                for day in ["Mon", "Tue", "Wed", "Thu"]:
-                    for time in ["17:30", "18:45", "20:00"]:
-                        slots.append(int(row[f"What days and times are convenient for you? [{day} {time}]"][0]))
-                d["slots"] = slots
-                #d["mosilana"] = row["Are you fine with teaching in Mosilana?"] == "Yes"
-                courses_teach = {}
-                for c in input_courses:
-                    #debug(f"course {c}")
-                    if c == "Rhythm Pilots":
-                        pass
-                    elif c == "Teachers Training" and name == "Kuba-Š.":
-                        answer_num = 3
-                    else:
-                        answer = row[f"What courses would you like to teach? [{c}]"]
-                        if not answer:
-                            warn(f"{name} provided no answer for {c}, defaulting to 0")
-                            answer_num = 0
-                        elif len(answer) >= 1:
-                            first = answer[0]
-                            if first in ("0", "1", "2", "3"):
-                                answer_num = int(first)
-                            else:
-                                error(f"Unexpected first char in answer: '{answer}'")
+        input_courses = [] # courses
+        n = 0
+
+        reader = csv.DictReader(f)
+        for row in reader:
+            n += 1
+            if n == 1:
+                # check courses when handling the first row
+                columns = list(row.keys())
+                for col in columns:
+                    if col.startswith("What courses would you like to teach?"):
+                        course = col.split("[")[1].split("]")[0]
+                        if course in self.COURSES_IGNORE:
+                            continue
+                        self.check_course(course)
+                        # problematic: Balboa Beginners 2
+                        input_courses.append(course)
+                input_courses.append("Rhythm Pilots") # TODO
+                info(f"Input courses (F): {sorted(input_courses)}")
+                info(f"Input courses (C): {sorted(self.courses)}")
+                # does not make sense (general vs. specific course names)
+                #info(f"Input courses (diff): {set(self.courses)-set(input_courses)-set(self.COURSES_IGNORE)}")
+            # handle the input data
+            debug("")
+            name = self.translate_teacher_name(row["Who are you?"])
+            debug(f"Reading: name {name}")
+            d = {}
+            d["ncourses_ideal"] = int(row["How many courses would you ideally like to teach?"])
+            d["ncourses_max"] = int(row["How many courses are you able to teach at most?"])
+            slots = []
+            for day in ["Mon", "Tue", "Wed", "Thu"]:
+                for time in ["17:30", "18:45", "20:00"]:
+                    slots.append(int(row[f"What days and times are convenient for you? [{day} {time}]"][0]))
+            d["slots"] = slots
+            #d["mosilana"] = row["Are you fine with teaching in Mosilana?"] == "Yes"
+            courses_teach = {}
+            for c in input_courses:
+                #debug(f"course {c}")
+                if c == "Rhythm Pilots":
+                    pass
+                elif c == "Teachers Training" and name == "Kuba-Š.":
+                    answer_num = 3
+                else:
+                    answer = row[f"What courses would you like to teach? [{c}]"]
+                    if not answer:
+                        warn(f"{name} provided no answer for {c}, defaulting to 0")
+                        answer_num = 0
+                    elif len(answer) >= 1:
+                        first = answer[0]
+                        if first in ("0", "1", "2", "3"):
+                            answer_num = int(first)
                         else:
-                            # should not happen
-                            error(f"Unexpected answer: '{answer}'")
-                    courses_teach[c] = answer_num
-                    #courses_teach[c] = int(row[f"What courses would you like to teach? [{c}]"][0])
-                d["courses_teach"] = courses_teach
-                d["courses_attend"] = [a.strip() for a in row["What courses and trainings would you like to attend?"].split(",") if a]
-                assert("" not in d["courses_attend"])
-                # there won't be Balboa Teachers Training, people would like to train at Shag/Balboa Open Training
-                if "Balboa Teachers Training" in d["courses_attend"]:
-                    # would happen in ignoring logic, but to be sure..
-                    d["courses_attend"].remove("Balboa Teachers Training")
-                    if "Shag/Balboa Open Training" not in d["courses_attend"]:
-                        d["courses_attend"].append("Shag/Balboa Open Training")
-                #debug(f"Courses attend before: {d['courses_attend']}")
-                for c in set(d["courses_attend"]):
-                    if c in self.COURSES_IGNORE:
-                        debug(f"courses_attend: removing: {c}")
-                        d["courses_attend"].remove(c)
+                            error(f"Unexpected first char in answer: '{answer}'")
                     else:
-                        debug(f"NOT removing: {c}")
-                #debug(f"Courses attend after: {d['courses_attend']}")
-                for c in d["courses_attend"]:
-                    debug(f"Check course 2: {c}")
-                    self.check_course(c)
-                teach_together = row["Who would you like to teach with?"]
-                d["teach_together"] = [self.translate_teacher_name(name.strip()) for name in teach_together.split(",") if name]
-                d["teach_not_together"] = [self.translate_teacher_name(name) for name in row["Are there any people you cannot teach with?"].split(",") if name not in ["", "-", "No", "není", "nah", "ne", "no", "None"]]
-                debug(f"Adding {name} to result")
-                self.teachers_active.append(name)
-                result[name] = d
+                        # should not happen
+                        error(f"Unexpected answer: '{answer}'")
+                courses_teach[c] = answer_num
+                #courses_teach[c] = int(row[f"What courses would you like to teach? [{c}]"][0])
+            d["courses_teach"] = courses_teach
+            d["courses_attend"] = [a.strip() for a in row["What courses and trainings would you like to attend?"].split(",") if a]
+            assert("" not in d["courses_attend"])
+            # there won't be Balboa Teachers Training, people would like to train at Shag/Balboa Open Training
+            if "Balboa Teachers Training" in d["courses_attend"]:
+                # would happen in ignoring logic, but to be sure..
+                d["courses_attend"].remove("Balboa Teachers Training")
+                if "Shag/Balboa Open Training" not in d["courses_attend"]:
+                    d["courses_attend"].append("Shag/Balboa Open Training")
+            #debug(f"Courses attend before: {d['courses_attend']}")
+            for c in set(d["courses_attend"]):
+                if c in self.COURSES_IGNORE:
+                    debug(f"courses_attend: removing: {c}")
+                    d["courses_attend"].remove(c)
+                else:
+                    debug(f"NOT removing: {c}")
+            #debug(f"Courses attend after: {d['courses_attend']}")
+            for c in d["courses_attend"]:
+                debug(f"Check course 2: {c}")
+                self.check_course(c)
+            teach_together = row["Who would you like to teach with?"]
+            d["teach_together"] = [self.translate_teacher_name(name.strip()) for name in teach_together.split(",") if name]
+            d["teach_not_together"] = [self.translate_teacher_name(name) for name in row["Are there any people you cannot teach with?"].split(",") if name not in ["", "-", "No", "není", "nah", "ne", "no", "None"]]
+            debug(f"Adding {name} to result")
+            self.teachers_active.append(name)
+            result[name] = d
         debug(f"Number of lines: {n}")
         debug(f"Result: {'|'.join(result)}")
         debug(f"Active teachers: {set(self.teachers_active)}")
 
+        if f is not sys.stdin:
+            f.close()
+
         #print(f"Column names: {columns}")
         return result
 
-    def init_form(self):
-        self.input_data = self.read_input()
+    def init_form(self, infile=None):
+        self.input_data = self.read_input(infile)
         pprint(self.input_data)
 
     # SPECIFIC HARD CONSTRAINTS
@@ -1324,10 +1333,26 @@ class Model:
                 print(f"{n}: {' '.join(Ts)}")
 
 
+def parse(argv=None):
+    if argv is None:
+        argv = sys.argv
+    debug(f"argv: {argv}")
+
+    if len(argv) > 2:
+        error(f"Too many arguments: {argv}")
+    elif len(argv) == 2:
+        return argv[1]
+    else:
+        return None
+
 def main():
+    #set_verbose()
+
+    infile = parse()
+
     # all input information
     input = Input()
-    input.init()
+    input.init(infile)
 
     # model construction
     model = Model()
