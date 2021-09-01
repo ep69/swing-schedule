@@ -1,0 +1,15 @@
+# SW Schedules Generator
+
+Generates schedules based on hard and soft constraints.
+
+## Install
+
+You need `python3` to use this tool. Other than that, only `OR-Tools` are needed:
+```
+python3 -m pip install --upgrade --user -r requirements.txt
+```
+
+## Run
+```
+python3 swing_schedule/swing_schedule.py <data/input.csv
+```
