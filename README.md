@@ -1,6 +1,6 @@
-# SW Schedules Generator
+# Swing Schedules Generator
 
-Generates schedules based on hard and soft constraints.
+Generates schedules for schools teaching partner dances.
 
 ## Install
 
