@@ -338,6 +338,8 @@ class Input:
         self.cr_strict = {}
         # teacher T must teach courses Cs
         self.tc_strict = {}
+        # course Cx that must open
+        self.courses_must_open = []
         # course Cx must happen on different day and at different time than Cy (and Cz)
         self.courses_different = []
         # course Cx must happen on different day than Cy (and Cz)
@@ -506,6 +508,10 @@ class Model:
                 for c in range(len(I.courses)):
                     for v in range(len(I.venues)):
                         self.tscv[(t,s,c,v)] = model.NewBoolVar("")
+        # course C is active
+        self.c_active = []
+        for c in range(len(I.courses)):
+            self.c_active.append(model.NewBoolVar(""))
 
         # teacher T teaches in venue V on day D
         # TODO do it wrt. attending courses - cannot teach in Koliste, attend in Mosilana, and teach again in Koliste
@@ -523,7 +529,8 @@ class Model:
                 model.Add(sum(self.src[(s,r,c)] for r in range(len(I.rooms))) == 1).OnlyEnforceIf(hit)
                 model.Add(sum(self.src[(s,r,c)] for r in range(len(I.rooms))) == 0).OnlyEnforceIf(hit.Not())
                 model.Add(self.cs[c] == s).OnlyEnforceIf(hit)
-                model.Add(self.cs[c] != s).OnlyEnforceIf(hit.Not())
+                # TODO when course is not active, we cannot require this
+                #model.Add(self.cs[c] != s).OnlyEnforceIf(hit.Not())
                 for t in range(len(I.teachers)):
                     model.AddBoolAnd([hit, self.tc[(t,c)]]).OnlyEnforceIf(self.tsc[(t,s,c)])
                     model.AddBoolOr([hit.Not(), self.tc[(t,c)].Not()]).OnlyEnforceIf(self.tsc[(t,s,c)].Not())
@@ -627,7 +634,8 @@ class Model:
                 model.Add(sum(self.src[(s,r,c)] for s in range(len(I.slots)) for r in range(len(I.rooms)) if I.rooms_venues[I.rooms[r]] == I.venues[v]) >= 1).OnlyEnforceIf(hit)
                 model.Add(sum(self.src[(s,r,c)] for s in range(len(I.slots)) for r in range(len(I.rooms)) if I.rooms_venues[I.rooms[r]] == I.venues[v]) == 0).OnlyEnforceIf(hit.Not())
                 model.Add(self.cv[c] == v).OnlyEnforceIf(hit)
-                model.Add(self.cv[c] != v).OnlyEnforceIf(hit.Not())
+                # TODO when course is not active, we cannot require this
+                #model.Add(self.cv[c] != v).OnlyEnforceIf(hit.Not())
 
         # number of lessons teacher T teaches
         self.teach_num = {}
@@ -658,9 +666,11 @@ class Model:
             # TODO this is probably the crucial spot to solve courses discrepancy
             if I.courses[c] not in I.COURSES_IGNORE:
                 debug(f"Not ignoring one-place-time constraing for {I.courses[c]}")
-                model.Add(sum(self.src[(s,r,c)] for s in range(len(I.slots)) for r in range(len(I.rooms))) == 1)
+                model.Add(sum(self.src[(s,r,c)] for s in range(len(I.slots)) for r in range(len(I.rooms))) == 1).OnlyEnforceIf(self.c_active[c])
+                model.Add(sum(self.src[(s,r,c)] for s in range(len(I.slots)) for r in range(len(I.rooms))) == 0).OnlyEnforceIf(self.c_active[c].Not())
             else:
-                debug(f"Ignoring one-place-time constraing for {I.courses[c]}")
+                # assert that I.courses contains only non-ignored courses
+                error(f"Ignoring one-place-time constraing for {I.courses[c]}")
 
         # at one time in one room, there is maximum one course
         for s in range(len(I.slots)):
@@ -670,19 +680,29 @@ class Model:
         # every regular course is taught by two teachers and solo course by one teacher
         for c in range(len(I.courses)):
             if I.courses[c] in I.COURSES_IGNORE:
-                pass
+                # assert that I.courses contains only non-ignored courses
+                error(f"Course {I.courses[c]} should be ignored")
             elif I.courses[c] in I.courses_regular:
                 model.Add(sum(self.tc[(I.Teachers[T],c)] for T in I.teachers if T in I.teachers_lead) <= 1)
                 model.Add(sum(self.tc[(I.Teachers[T],c)] for T in I.teachers if T in I.teachers_follow) <= 1)
-                model.Add(sum(self.tc[(I.Teachers[T],c)] for T in I.teachers) == 2)
+                model.Add(sum(self.tc[(I.Teachers[T],c)] for T in I.teachers) == 2).OnlyEnforceIf(self.c_active[c])
+                model.Add(sum(self.tc[(I.Teachers[T],c)] for T in I.teachers) == 0).OnlyEnforceIf(self.c_active[c].Not())
             elif I.courses[c] in I.courses_solo:
-                model.Add(sum(self.tc[(I.Teachers[T],c)] for T in I.teachers) == 1)
+                model.Add(sum(self.tc[(I.Teachers[T],c)] for T in I.teachers) == 1).OnlyEnforceIf(self.c_active[c])
+                model.Add(sum(self.tc[(I.Teachers[T],c)] for T in I.teachers) == 0).OnlyEnforceIf(self.c_active[c].Not())
             elif I.courses[c] in I.courses_open:
                 model.Add(sum(self.tc[(I.Teachers[T],c)] for T in I.teachers) == 0)
             else:
                 assert(False)
 
         # SPECIFIC CONSTRAINTS
+
+        # TODO remove, testing only
+        #model.Add(self.c_active[I.Courses["Balboa Beginners"]] == 0)
+        model.Add(self.c_active[I.Courses["Collegiate Shag 1"]] == 0)
+
+        for C in I.courses_must_open:
+            model.Add(self.c_active[I.Courses[C]] == 1)
 
         # unspecified teachers teach no courses
         for T in I.teachers:
@@ -704,8 +724,9 @@ class Model:
                 t = I.Teachers[T]
                 for C in Cs:
                     c = I.Courses[C]
-                    strict_assignments.append(self.tc[(t,c)])
-            model.AddBoolAnd(strict_assignments)
+                    #strict_assignments.append(self.tc[(t,c)])
+                    model.Add(self.tc[(t,c)] == 1).OnlyEnforceIf(self.c_active[c])
+            #model.AddBoolAnd(strict_assignments)
 
         teachers_all = set(range(len(I.teachers)))
         for (C, Ts) in I.ct_possible.items():
@@ -815,7 +836,9 @@ class Model:
             model.Add(sum(self.src[(s,I.Rooms[R],I.Courses[C])] for s in range(len(I.slots))) == 0)
 
         for (C, R) in I.cr_strict.items():
-            model.Add(sum(self.src[(s,I.Rooms[R],I.Courses[C])] for s in range(len(I.slots))) == 1)
+            c = I.Courses[C]
+            model.Add(sum(self.src[(s,I.Rooms[R],c)] for s in range(len(I.slots))) == 1).OnlyEnforceIf(self.c_active[c])
+            model.Add(sum(self.src[(s,I.Rooms[R],c)] for s in range(len(I.slots))) == 0).OnlyEnforceIf(self.c_active[c].Not())
 
 
         # OPTIMIZATION
