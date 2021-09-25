@@ -421,6 +421,8 @@ class Input:
             "attend_free": 50,
             # person-related
             "teach_together": 25,
+            # overall schedule
+            "courses_closed": 150, # TODO adjust
             # serious penalties
             "everybody_teach": 1000,
             # other
@@ -909,7 +911,6 @@ class Model:
                         model.Add(sum(M.ts[(t,s)] for s in [d*3+i for i in (0,1,2)]) < 3).OnlyEnforceIf(day_three.Not())
                         days_three_list.append(day_three)
                     model.Add(days_three == sum(days_three_list))
-
                     penalties_teachthree.append(days_three)
                 penalties[name] = penalties_teachthree
                 def analysis(src, tc):
@@ -1277,6 +1278,14 @@ class Model:
                             result.append(f"{T}")
                     return result
                 penalties_analysis[name] = analysis
+            elif name == "courses_closed": # penalty if too little courses are opened
+                penalties_courses_closed = []
+                total_courseslots = 4 * 3 * 2 # days, times, rooms
+                n_active = model.NewIntVar(0, total_courseslots, "")
+                n_closed = model.NewIntVar(0, total_courseslots, "")
+                model.Add(n_closed == total_courseslots - sum(M.c_active))
+                penalties_courses_closed = [n_closed]
+                penalties[name] = penalties_courses_closed
 
         self.penalties = penalties
         self.penalties_analysis = penalties_analysis
