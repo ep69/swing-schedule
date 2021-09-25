@@ -757,23 +757,6 @@ class Model:
             for d in range(len(I.days)):
                 model.Add(sum(self.tdv[(t,d,v)] for v in range(len(I.venues))) <= 1)
 
-        # strict courses schedule
-        # nothing else happens in parallel with Teachers Training
-        #model.Add(sum(self.src[(11,r,c)] for r in range(len(I.rooms)) for c in range(len(I.courses))) == 1)
-        # Shag/Balboa open is AFTER Collegiate Shag 2 (combined with courses_same
-        #model.Add(self.cs[I.Courses["Collegiate Shag 2"]]+1 == self.cs[I.Courses["Shag/Balboa Open Training"]])
-        # PJ training must happen on Tuesday and Thursday
-        model.Add(self.cs[I.Courses["Rhythm Pilots /1"]] == 10)
-        model.Add(self.cs[I.Courses["Rhythm Pilots /2"]] == 11)
-        model.AddAllowedAssignments([self.cs[I.Courses["Blues/Slow Open Training"]]], [[x] for x in [1, 2, 4, 5, 7, 8, 10, 11]])
-        # Blues Open should not start at 17:30
-        model.AddAllowedAssignments([self.cs[I.Courses["Blues/Slow Open Training"]]], [[x] for x in [1, 2, 4, 5, 7, 8, 10, 11]])
-        # Teachers Training in the evening in case it's longer and on Monday or Wednesday (due to Rhythm Pilots)
-        model.Add(self.cs[I.Courses["Teachers Training"]] == 8)
-        model.Add(self.cs[I.Courses["Blues 1"]] == 8)
-        #model.AddAllowedAssignments([self.cs[I.Courses["Teachers Training"]]], [[x] for x in [2, 8]])
-        #model.AddAllowedAssignments([self.cs[I.Courses["Teachers Training"]]], [[x] for x in [2, 5, 8, 11]])
-
         # teachers HARD slot preferences
         for T in I.teachers:
             if T in I.ts_pref: # TODO what about people without preferences?
