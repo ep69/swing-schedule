@@ -3,7 +3,7 @@
 import sys
 import csv
 from ortools.sat.python import cp_model
-from pprint import pprint
+import pprint
 
 VERBOSE = False
 
@@ -56,15 +56,12 @@ class Input:
         for i, R in enumerate(self.rooms):
             self.Rooms[R] = i
 
-        #self.venues = ["mosilana", "koliste"]
         self.venues = ["koliste"]
         self.Venues = {}
         for i, V in enumerate(self.venues):
             self.Venues[V] = i
 
         self.rooms_venues = {
-            #"small": "mosilana",
-            #"big": "mosilana",
             "k-3": "koliste",
             "k-4": "koliste",
             }
@@ -72,7 +69,6 @@ class Input:
         self.courses_open = [
             "Lindy/Charleston Open Training",
             "Blues/Slow Open Training",
-            "Balboa Teachers Training",
             "Rhythm Pilots /1",
             "Rhythm Pilots /2",
             ]
@@ -88,6 +84,7 @@ class Input:
             "LH 1 - English",
             "LH 2 - Party Moves /1",
             "LH 2 - Party Moves /2",
+            "LH 2 - Party Moves - English",
             "LH 2 - Survival Guide",
             "LH 2.5 - Swingout /1",
             "LH 2.5 - Swingout /2",
@@ -124,7 +121,6 @@ class Input:
             "Saint Louis Shag 2",
             "Balboa Advanced",
             "Slow Balboa",
-            "Balboa Teachers Training",
             "Blues 2",
         ]
         self.courses_open = list(set(self.courses_open)-set(self.COURSES_IGNORE))
@@ -163,9 +159,8 @@ class Input:
                 ("Zora", "follow"),
                 ("Martina", "follow"),
                 ]
-            self.FAKE_TEACHERS = ["LEADER", "FOLLOW"]
 
-        self.teachers = self.teachers_active + self.FAKE_TEACHERS
+        self.teachers = self.teachers_active
         debug(f"Active teachers: {self.teachers_active}")
         self.teachers_lead = [t[0] for t in self.TEACHERS if t[1] == "lead" and t[0] in self.teachers]
         debug(f"Leaders: {self.teachers_lead}")
@@ -173,7 +168,7 @@ class Input:
         debug(f"Follows: {self.teachers_follow}")
         self.teachers_both = [t[0] for t in self.TEACHERS if t[1] == "both" and t[0] in self.teachers]
         debug(f"Both: {self.teachers_both}")
-        assert(set(self.teachers) == set(self.teachers_lead + self.teachers_follow + self.teachers_both))
+        assert(set(self.teachers) >= set(self.teachers_lead + self.teachers_follow + self.teachers_both))
         assert(len(set(self.teachers_lead) & set(self.teachers_follow)) == 0)
         assert(len(set(self.teachers_lead) & set(self.teachers_both)) == 0)
         assert(len(set(self.teachers_both) & set(self.teachers_follow)) == 0)
@@ -200,8 +195,10 @@ class Input:
         error(f"Unknown course: '{course}'")
 
     def is_course_type(self, Cspec, Cgen):
-        if Cspec.startswith("LH 1 - English"):
-            return Cgen.startswith("LH 1 - English")
+        #if Cspec.startswith("LH 1 - English"):
+        if Cspec.endswith("English"):
+            #return Cgen.startswith("LH 1 - English")
+            return Cgen == Cspec
         return Cspec.startswith(Cgen)
 
     def read_input(self, infile=None):
@@ -247,7 +244,24 @@ class Input:
                 for time in ["17:30", "18:45", "20:00"]:
                     slots.append(int(row[f"What days and times are convenient for you? [{day} {time}]"][0]))
             d["slots"] = slots
-            #d["mosilana"] = row["Are you fine with teaching in Mosilana?"] == "Yes"
+            mindays = row["Do you prefer to spend as few days as possible with teaching or not having many courses in one day?"]
+            if mindays.startswith("I need to spend as few days as possible with teaching"):
+                d["mindays"] = 1
+            elif mindays.startswith("I prefer teaching less courses in one day"):
+                d["mindays"] = -1
+            elif mindays.startswith("I don't mind either"):
+                d["mindays"] = 0
+            else:
+                error("Unknown mindays answer")
+            splitok = row["How do you feel about waiting between courses?"]
+            if splitok.startswith("I prefer courses following each other"):
+                d["splitok"] = -1
+            elif splitok.startswith("I like to rest between lessons"):
+                d["splitok"] = 1
+            elif splitok.startswith("Both are equally fine"):
+                d["splitok"] = 0
+            else:
+                error("Unknown splitok answer")
             courses_teach = {}
             for c in input_courses:
                 #debug(f"course {c}")
@@ -274,12 +288,6 @@ class Input:
             d["courses_teach"] = courses_teach
             d["courses_attend"] = [a.strip() for a in row["What courses and trainings would you like to attend?"].split(",") if a]
             assert("" not in d["courses_attend"])
-            # there won't be Balboa Teachers Training, people would like to train at Shag/Balboa Open Training
-            if "Balboa Teachers Training" in d["courses_attend"]:
-                # would happen in ignoring logic, but to be sure..
-                d["courses_attend"].remove("Balboa Teachers Training")
-                if "Shag/Balboa Open Training" not in d["courses_attend"]:
-                    d["courses_attend"].append("Shag/Balboa Open Training")
             #debug(f"Courses attend before: {d['courses_attend']}")
             for c in set(d["courses_attend"]):
                 if c in self.COURSES_IGNORE:
@@ -309,7 +317,7 @@ class Input:
 
     def init_form(self, infile=None):
         self.input_data = self.read_input(infile)
-        pprint(self.input_data)
+        info(pprint.pformat(self.input_data))
 
     # SPECIFIC HARD CONSTRAINTS
     def init_rest(self):
@@ -382,13 +390,13 @@ class Input:
                     if d in self.input_data:
                         self.tt_not_together.append((T, d))
                     else:
-                        warn(f"Unknown teacher {d} (tt_not_together), ignoring")
+                        warn(f"Inactive teacher {d} (tt_not_together), ignoring")
                 l = []
                 for d in data["teach_together"]:
                     if d in self.input_data:
                         l.append(d)
                     else:
-                        warn(f"Unknown teacher {d} (tt_together), ignoring")
+                        warn(f"Inactive teacher {d} (tt_together), ignoring")
                 self.tt_together[T] = l
             self.ts_pref[T] = data["slots"]
             assert(len(self.ts_pref[T]) == len(self.slots))
@@ -400,7 +408,8 @@ class Input:
             # workload
             "utilization": 25, # squared
             # placement
-            "days": 75,
+            "teach_days": 75,
+            "teach_three": 75,
             "occupied_days": 25, # squared
             "split": 50,
             # slots
@@ -413,11 +422,9 @@ class Input:
             # person-related
             "teach_together": 25,
             # serious penalties
-            "faketeachers": 1000000,
             "everybody_teach": 1000,
             # other
-            "mosilana": 0,
-            # TODO teaching multiple times with the same person?
+            # TODO teaching multiple times with the same person? (currently HARD)
         }
 
 
@@ -706,9 +713,8 @@ class Model:
 
         # unspecified teachers teach no courses
         for T in I.teachers:
-            if T not in I.FAKE_TEACHERS:
-                debug(f"Teacher max: {T} {I.t_util_max.get(T,-1)}")
-                model.Add(sum(self.tc[(I.Teachers[T],c)] for c in range(len(I.courses))) <= I.t_util_max.get(T, 0))
+            debug(f"Teacher max: {T} {I.t_util_max.get(T,-1)}")
+            model.Add(sum(self.tc[(I.Teachers[T],c)] for c in range(len(I.courses))) <= I.t_util_max.get(T, 0))
 
 #        # community teachers that must teach
 #        for T in ["Zuzka", "Vojta-N.", "Míša-L.", "Kuba-B."]:
@@ -773,8 +779,7 @@ class Model:
                     if v == 0:
                         model.Add(self.ts[(I.Teachers[T], s)] == 0)
             else:
-                if T not in I.FAKE_TEACHERS:
-                    warn(f"No slot preferences for teacher {T}")
+                warn(f"No slot preferences for teacher {T}")
 
         # same courses should not happen in same days and also not in same times
         # it should probably not be a strict limitation, but it is much easier to write
@@ -879,10 +884,73 @@ class Model:
                                 result.append(f"{T}/{util_real}r-{util_ideal}i")
                     return result
                 penalties_analysis[name] = analysis
-            elif name == "days":
+            elif name == "teach_three":
+                # teaching three courses in one day
+                penalties_teachthree = []
+                for T in I.teachers:
+                    t = I.Teachers[T]
+                    mindays = I.input_data[T]["mindays"]
+                    if mindays == -1:
+                        debug(f"teach_three applies to teacher {T}")
+                    elif mindays == 0:
+                        info(f"teach_three does not apply to teacher {T}")
+                        continue
+                    elif mindays == 1:
+                        debug(f"teach_three is the opposite of what teacher {T} wants")
+                        continue
+                    else:
+                        error(f"Unknown mindays value: {mindays} for teacher {T}")
+                    days_three = model.NewIntVar(0, len(I.days), "")
+                    days_three_list = []
+                    for d in range(len(I.days)):
+                        # day is full (teacher teaches in all three slots)
+                        day_three = model.NewBoolVar("")
+                        model.Add(sum(M.ts[(t,s)] for s in [d*3+i for i in (0,1,2)]) == 3).OnlyEnforceIf(day_three)
+                        model.Add(sum(M.ts[(t,s)] for s in [d*3+i for i in (0,1,2)]) < 3).OnlyEnforceIf(day_three.Not())
+                        days_three_list.append(day_three)
+                    model.Add(days_three == sum(days_three_list))
+
+                    penalties_teachthree.append(days_three)
+                penalties[name] = penalties_teachthree
+                def analysis(src, tc):
+                    result = []
+                    for T in I.teachers:
+                        if I.input_data[T]["mindays"] != -1:
+                            # only applies to teachers who don't want full days
+                            continue
+                        t = I.Teachers[T]
+                        cs = []
+                        for c in range(len(I.courses)):
+                            if tc[(t,c)]:
+                                cs.append(c)
+                        n = 0
+                        for d in range(len(I.days)):
+                            if (
+                                    sum(src[(d*len(I.times),r,c)]  for r in range(len(I.rooms)) for c in cs) >= 1
+                                    and sum(src[(d*len(I.times)+1,r,c)]  for r in range(len(I.rooms)) for c in cs) >= 1
+                                    and sum(src[(d*len(I.times)+2,r,c)]  for r in range(len(I.rooms)) for c in cs) >= 1
+                                    ):
+                                n += 1
+                        if n > 0:
+                            result.append(f"{I.teachers[t]}/{n}")
+                    return result
+                penalties_analysis[name] = analysis
+            elif name == "teach_days":
                 # nobody should come more days then necessary
-                penalties_days = []
-                for t in range(len(I.teachers)):
+                penalties_teachdays = []
+                for T in I.teachers:
+                    t = I.Teachers[T]
+                    mindays = I.input_data[T]["mindays"]
+                    if mindays == 1:
+                        debug(f"teach_days applies to teacher {T}")
+                    elif mindays == 0:
+                        info(f"teach_days does not apply to teacher {T}")
+                        continue
+                    elif mindays == -1:
+                        warn(f"teach_days is the opposite of what teacher {T} wants")
+                        continue
+                    else:
+                        error(f"Unknown mindays value: {mindays} for teacher {T}")
                     teaches_days = model.NewIntVar(0, len(I.days), "TD:%i" % t)
                     model.Add(teaches_days == sum(M.td[(t,d)] for d in range(len(I.days))))
                     teaches_minus_1 = model.NewIntVar(0, len(I.days), "Tm1:%i" % t)
@@ -898,11 +966,15 @@ class Model:
                     model.Add(days_extra == 0).OnlyEnforceIf(teaches_some.Not())
                     days_extra_sq = model.NewIntVar(0, len(I.days)**2, "Tdds:%i" % t)
                     model.AddMultiplicationEquality(days_extra_sq, [days_extra, days_extra])
-                    penalties_days.append(days_extra_sq)
-                penalties[name] = penalties_days
+                    penalties_teachdays.append(days_extra_sq)
+                penalties[name] = penalties_teachdays
                 def analysis(src, tc):
                     result = []
-                    for t in range(len(I.teachers)):
+                    for T in I.teachers:
+                        if I.input_data[T]["mindays"] != 1:
+                            # only applies to teachers who want as few days as possible
+                            continue
+                        t = I.Teachers[T]
                         cs = []
                         for c in range(len(I.courses)):
                             if tc[(t,c)]:
@@ -960,7 +1032,20 @@ class Model:
             elif name == "split":
                 # teacher should not wait between lessons
                 penalties_split = []
-                for t in range(len(I.teachers)):
+                #for t in range(len(I.teachers)):
+                for T in I.teachers:
+                    t = I.Teachers[T]
+                    splitok = I.input_data[T]["splitok"]
+                    if splitok == 1:
+                        error(f"Teacher {T} wants split, not implemented yet")
+                        # TODO
+                    elif splitok == 0:
+                        info(f"Teacher {T} indifferent to split")
+                        continue
+                    elif splitok == -1:
+                        debug(f"Teacher {T} does not like split")
+                    else:
+                        error(f"Unknown splitok value: {splitok}")
                     days_split = model.NewIntVar(0, len(I.days), "TDsplit:%i" % t)
                     tsplits = []
                     for d in range(len(I.days)):
@@ -980,7 +1065,11 @@ class Model:
                 penalties[name] = penalties_split
                 def analysis(src, tc):
                     result = []
-                    for t in range(len(I.teachers)):
+                    for T in I.teachers:
+                        if I.input_data[T]["splitok"] != -1:
+                            # only applies to teachers who don't like split
+                            continue
+                        t = I.Teachers[T]
                         cs = []
                         for c in range(len(I.courses)):
                             if tc[(t,c)]:
@@ -1116,13 +1205,6 @@ class Model:
                             result.append(f"{T}/{len(courses_bad)}")
                     return result
                 penalties_analysis[name] = analysis
-            elif name == "faketeachers":
-                penalties_faketeachers = []
-                # fake teachers
-                for T in I.FAKE_TEACHERS:
-                    if T in I.teachers:
-                        penalties_faketeachers.append(sum(M.tc[(I.Teachers[T],c)] for c in range(len(I.courses))))
-                penalties[name] = penalties_faketeachers
             elif name == "everybody_teach":
                 penalties_everybody_teach = []
                 # fake teachers
@@ -1132,12 +1214,6 @@ class Model:
                     else:
                         warn(f"Active teacher {T} not among considered teachers!")
                 penalties[name] = penalties_everybody_teach
-            elif name == "mosilana": # penalty for not using koliste
-                util_koliste = model.NewIntVar(0, 2*len(I.slots), "") # utilization of Koliste
-                model.Add(util_koliste == sum(M.src[(s,r,c)] for s in range(len(I.slots)) for r in range(len(I.rooms)) if I.rooms_venues[I.rooms[r]] == "koliste" for c in range(len(I.courses))))
-                free_koliste = model.NewIntVar(0, 2*len(I.slots), "") # free slots in Koliste
-                model.Add(free_koliste == 2*len(I.slots)-util_koliste-1) # -1 for Teachers Training
-                penalties[name] = [free_koliste]
             elif name == "attend_free": # penalty if interested in attending cannot attend (they teach something else in the same time)
                 # courses that some teachers would like to attend
                 courses_attend = [I.input_data[T]["courses_attend"] for T in I.input_data]
