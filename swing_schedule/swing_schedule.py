@@ -286,6 +286,15 @@ class Input:
                 courses_teach[c] = answer_num
                 #courses_teach[c] = int(row[f"What courses would you like to teach? [{c}]"][0])
             d["courses_teach"] = courses_teach
+            bestpref = row["What preference is the most important for you?"]
+            if bestpref.startswith("Time"):
+                d["bestpref"] = "time"
+            elif bestpref.startswith("Course"):
+                d["bestpref"] = "course"
+            elif bestpref.startswith("People"):
+                d["bestpref"] = "person"
+            else:
+                error(f"Unknow best pref: {bestpref}")
             d["courses_attend"] = [a.strip() for a in row["What courses and trainings would you like to attend?"].split(",") if a]
             assert("" not in d["courses_attend"])
             #debug(f"Courses attend before: {d['courses_attend']}")
@@ -424,10 +433,12 @@ class Input:
             # overall schedule
             "courses_closed": 150, # TODO adjust
             # serious penalties
-            "everybody_teach": 1000,
+            "everybody_teach": 100000,
             # other
             # TODO teaching multiple times with the same person? (currently HARD)
+            # TODO integrate bestpref (what people prefer most)
         }
+        self.BOOSTER = 2
 
 
 class Model:
@@ -1079,7 +1090,11 @@ class Model:
                         if set([1,2]) <= set(prefs) or set([1,3]) <= set(prefs):
                             # teacher T strongly prefers some slots over others
                             slots_bad = [s for s in range(len(I.slots)) if prefs[s] == 1]
-                            penalties_slotpref_bad.append(sum(M.ts[(I.Teachers[T],s)] for s in slots_bad))
+                            boost = 1
+                            if I.input_data[T]["bestpref"] == "time":
+                                debug(f"Boosting time preferences for {T}")
+                                boost = I.BOOSTER
+                            penalties_slotpref_bad.append(boost * sum(M.ts[(I.Teachers[T],s)] for s in slots_bad))
                 penalties[name] = penalties_slotpref_bad
                 def analysis(src, tc):
                     result = []
@@ -1148,7 +1163,11 @@ class Model:
                             # teacher T strongly prefers some courses over others
                             courses_bad = [C for C in I.courses_regular+I.courses_solo if I.tc_pref[T].get(C, -1) == 1]
                             debug(f"courses_bad {T}: {courses_bad}")
-                            penalties_coursepref.append(sum(M.tc[(I.Teachers[T],I.Courses[C])] for C in courses_bad))
+                            boost = 1
+                            if I.input_data[T]["bestpref"] == "course":
+                                debug(f"Boosting course preferences for {T}")
+                                boost = I.BOOSTER
+                            penalties_coursepref.append(boost * sum(M.tc[(I.Teachers[T],I.Courses[C])] for C in courses_bad))
                 penalties[name] = penalties_coursepref
                 def analysis(src, tc):
                     result = []
@@ -1222,6 +1241,8 @@ class Model:
                         penalties_attend_free.append(penalty_slot)
                 penalties[name] = penalties_attend_free
             elif name == "teach_together": # penalty if interested in teaching with Ts but teaches with noone
+                # IDEA: make this somehow counted as percent of courses taught with non-liked teachers?
+                # e.g., teaching 3 courses with liked and 2 with other would mean 40% penalty
                 penalties_teach_together = []
                 # teachers with teach_together preferences
                 for T in I.tt_together:
@@ -1242,7 +1263,13 @@ class Model:
                     nobody = model.NewBoolVar("")
                     model.Add(sum(success_list) == 0).OnlyEnforceIf(nobody)
                     model.Add(sum(success_list) >= 1).OnlyEnforceIf(nobody.Not())
-                    penalties_teach_together.append(nobody)
+                    boost = 1
+                    if I.input_data[T]["bestpref"] == "person":
+                        debug(f"Boosting people preferences for {T}")
+                        boost = I.BOOSTER
+                    boosted = model.NewIntVar(0, I.BOOSTER, "")
+                    model.Add(boosted == boost * nobody)
+                    penalties_teach_together.append(boosted)
                 penalties[name] = penalties_teach_together
                 def analysis(src, tc):
                     result = []
@@ -1424,21 +1451,29 @@ class Model:
                 print(f"{n}: {' '.join(Ts)}")
 
 
+# The worst argument parser in the history of argument parsers, maybe ever.
 def parse(argv=None):
     if argv is None:
         argv = sys.argv
-    debug(f"argv: {argv}")
 
-    if len(argv) > 2:
+    input_file = None
+    if len(argv) > 3:
         error(f"Too many arguments: {argv}")
-    elif len(argv) == 2:
-        return argv[1]
+    elif len(argv) >= 2:
+        for i in range(1, len(argv)):
+            if argv[i] == "-v":
+                set_verbose()
+                debug(f"argv: {argv}")
+            else:
+                input_file = argv[i]
     else:
-        return None
+        # no args
+        pass
+
+    debug(f"Input file: {input_file}")
+    return input_file
 
 def main():
-    #set_verbose()
-
     infile = parse()
 
     # all input information
