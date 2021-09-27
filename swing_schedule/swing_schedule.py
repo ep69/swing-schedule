@@ -91,8 +91,8 @@ class Input:
             "LH 3 - Musicality",
             "LH 3 - Charleston",
             "LH 3 - Cool Moves and Styling",
-            "LH 4 - TODO /1",
-            "LH 4 - TODO /2",
+            "LH 4 - Free Topic /1",
+            "LH 4 - Free Topic /2",
             "LH 5",
             "Collegiate Shag 1",
             "Collegiate Shag 2",
@@ -108,20 +108,20 @@ class Input:
             "Blues 2",
             ]
         self.COURSES_IGNORE = [
-            "LH 1 - Beginners /3", #
-            #"LH 1 - English",
-            #"LH 2.5 - Swingout /2", #
-            #"LH 3 - Musicality",
-            "LH 4 - TODO /2",
-            "LH 5",
-            "Solo",
-            "Airsteps 1",
-            "Airsteps 2",
-            "Saint Louis Shag 1",
-            "Saint Louis Shag 2",
-            "Balboa Advanced",
-            "Slow Balboa",
-            "Blues 2",
+#            "LH 1 - Beginners /3", #
+#            #"LH 1 - English",
+#            #"LH 2.5 - Swingout /2", #
+#            #"LH 3 - Musicality",
+#            "LH 4 - TODO /2",
+#            "LH 5",
+#            "Solo",
+#            "Airsteps 1",
+#            "Airsteps 2",
+#            "Saint Louis Shag 1",
+#            "Saint Louis Shag 2",
+#            "Balboa Advanced",
+#            "Slow Balboa",
+#            "Blues 2",
         ]
         self.courses_open = list(set(self.courses_open)-set(self.COURSES_IGNORE))
         self.courses_solo = list(set(self.courses_solo)-set(self.COURSES_IGNORE))
@@ -267,8 +267,6 @@ class Input:
                 #debug(f"course {c}")
                 if c == "Rhythm Pilots":
                     pass
-                elif c == "Teachers Training" and name == "Kuba-Š.":
-                    answer_num = 3
                 else:
                     answer = row[f"What courses would you like to teach? [{c}]"]
                     if not answer:
@@ -409,6 +407,9 @@ class Input:
                 self.tt_together[T] = l
             self.ts_pref[T] = data["slots"]
             assert(len(self.ts_pref[T]) == len(self.slots))
+        debug("CT_POSSIBLE:")
+        for C in self.courses_regular + self.courses_solo:
+            debug(f"ct_possible {C}: {', '.join(self.ct_possible[C])}")
             # attendance done directly through input_data
 
     def init_penalties(self):
