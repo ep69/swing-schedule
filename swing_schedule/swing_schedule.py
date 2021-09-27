@@ -516,7 +516,7 @@ class Model:
         # course C takes place in slot S
         self.cs = []
         for c in range(len(I.courses)):
-            self.cs.append(model.NewIntVar(0, len(I.slots)-1, ""))
+            self.cs.append(model.NewIntVar(-1, len(I.slots)-1, ""))
         # room R is in venue V
         self.rv = []
         for r in range(len(I.rooms)):
@@ -550,8 +550,8 @@ class Model:
                 model.Add(sum(self.src[(s,r,c)] for r in range(len(I.rooms))) == 1).OnlyEnforceIf(hit)
                 model.Add(sum(self.src[(s,r,c)] for r in range(len(I.rooms))) == 0).OnlyEnforceIf(hit.Not())
                 model.Add(self.cs[c] == s).OnlyEnforceIf(hit)
-                # TODO when course is not active, we cannot require this
-                #model.Add(self.cs[c] != s).OnlyEnforceIf(hit.Not())
+                # we use -1 as a value for non-active (c_active) courses
+                model.Add(self.cs[c] != s).OnlyEnforceIf(hit.Not())
                 for t in range(len(I.teachers)):
                     model.AddBoolAnd([hit, self.tc[(t,c)]]).OnlyEnforceIf(self.tsc[(t,s,c)])
                     model.AddBoolOr([hit.Not(), self.tc[(t,c)].Not()]).OnlyEnforceIf(self.tsc[(t,s,c)].Not())
@@ -1367,6 +1367,9 @@ class Model:
 #                    else:
 #                        m += "0"
 #                debug(m)
+            debug(f"Courses openness and indices")
+            for c in range(len(I.courses)):
+                debug(f"{I.courses[c]: <30}: {self.Value(M.c_active[c])} {self.Value(M.cs[c])}")
             result_penalties = {}
             # FIXME how to access penalties?
             for (name, l) in M.penalties.items():
