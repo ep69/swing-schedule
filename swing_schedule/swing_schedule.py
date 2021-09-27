@@ -94,6 +94,7 @@ class Input:
             "LH 4 - Free Topic /1",
             "LH 4 - Free Topic /2",
             "LH 5",
+            "Charleston 2",
             "Collegiate Shag 1",
             "Collegiate Shag 2",
             "Balboa Beginners",
