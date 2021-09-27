@@ -2,6 +2,7 @@
 
 import sys
 import csv
+import argparse
 from ortools.sat.python import cp_model
 import pprint
 
@@ -25,6 +26,10 @@ def warn(m):
 def error(m):
     print(f"ERROR: {m}")
     sys.exit(1)
+
+def stop():
+    print(f"STOP ... Execution halted for debugging purposes")
+    sys.exit(100)
 
 class Input:
     def init(self, infile=None):
@@ -1458,32 +1463,23 @@ class Model:
 
 # The worst argument parser in the history of argument parsers, maybe ever.
 def parse(argv=None):
-    if argv is None:
-        argv = sys.argv
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Debug output")
+    parser.add_argument("-s", "--students", action="store", dest="students", help="Students' preferences CSV")
+    parser.add_argument("-t", "--teachers", action="store", dest="teachers", help="Teachers' preferences CSV")
+    args = parser.parse_args()
 
-    input_file = None
-    if len(argv) > 3:
-        error(f"Too many arguments: {argv}")
-    elif len(argv) >= 2:
-        for i in range(1, len(argv)):
-            if argv[i] == "-v":
-                set_verbose()
-                debug(f"argv: {argv}")
-            else:
-                input_file = argv[i]
-    else:
-        # no args
-        pass
+    if args.verbose:
+        set_verbose()
 
-    debug(f"Input file: {input_file}")
-    return input_file
+    return (args.teachers, args.students)
 
 def main():
-    infile = parse()
+    teach_csv, stud_csv = parse()
 
     # all input information
     input = Input()
-    input.init(infile)
+    input.init(teach_csv)
 
     # model construction
     model = Model()
