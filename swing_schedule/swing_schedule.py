@@ -32,15 +32,18 @@ def stop():
     sys.exit(100)
 
 class Input:
-    def init(self, teachers_csv, students_csv=None):
+    def init(self, teachers_csv, students_csv=None, extra_courses=None):
         self.init_constants()
-        self.init_teachers_form(teachers_csv)
-        if students_csv is not None:
-            self.init_students_form(students_csv)
-        info(pprint.pformat(self.input_data))
+        self.init_form(teachers_csv, students_csv, extra_courses)
         self.init_teachers()
         self.init_rest()
         self.init_penalties()
+
+    def init_form(self, teachers_csv, students_csv=None, extra_courses=None):
+        self.init_teachers_form(teachers_csv, extra_courses)
+        if students_csv is not None:
+            self.init_students_form(students_csv)
+        info(pprint.pformat(self.input_data))
 
     def init_constants(self):
         #self.days = ["Monday", "Tuesday", "Wednesday", "Thursday"]
@@ -79,19 +82,18 @@ class Input:
             "Blues/Slow Open Training",
             "Rhythm Pilots /1",
             "Rhythm Pilots /2",
+            "Shag/Balboa Open Training",
             ]
         self.courses_solo = [
             "Solo",
             "Teachers Training",
-            "Shag/Balboa Open Training",
             ]
         self.courses_regular = [
             "LH 1 - Beginners /1",
             "LH 1 - Beginners /2",
             "LH 1 - Beginners /3",
             "LH 1 - English",
-            "LH 2 - Party Moves /1",
-            "LH 2 - Party Moves /2",
+            "LH 2 - Party Moves",
             "LH 2 - Party Moves - English",
             "LH 2 - Survival Guide",
             "LH 2.5 - Swingout /1",
@@ -99,8 +101,8 @@ class Input:
             "LH 3 - Musicality",
             "LH 3 - Charleston",
             "LH 3 - Cool Moves and Styling",
-            "LH 4 - Free Topic /1",
-            "LH 4 - Free Topic /2",
+            "LH 4 - Swingout Clinic",
+            "LH 4 - Musicality",
             "LH 5",
             "Charleston 2",
             "Collegiate Shag 1",
@@ -198,19 +200,19 @@ class Input:
 
     def is_course_type(self, Cspec, Cgen):
         if Cspec.endswith("English"):
-            debug(f"is_course_type: {Cspec} {Cgen} {Cgen == Cspec}")
+            #debug(f"is_course_type: {Cspec} {Cgen} {Cgen == Cspec}")
             return Cgen == Cspec
-        debug(f"is_course_type: {Cspec} {Cgen} {Cspec.startswith(Cgen)}")
+        #debug(f"is_course_type: {Cspec} {Cgen} {Cspec.startswith(Cgen)}")
         return Cspec.startswith(Cgen)
 
     def check_course(self, course):
         for Cspec in self.courses:
             if self.is_course_type(Cspec, course):
-                debug(f"Course {course} checked: {Cspec}")
+                debug(f"Course preference {course} maps, e.g to {Cspec}")
                 return
         error(f"Unknown course: '{course}'")
 
-    def read_teachers_input(self, infile=None):
+    def read_teachers_input(self, infile=None, extra_courses=None):
         if infile:
             info(f"Opening {infile}")
             f = open(infile, mode="r")
@@ -236,7 +238,9 @@ class Input:
                         self.check_course(course)
                         # problematic: Balboa Beginners 2
                         input_courses.append(course)
-                input_courses.append("Rhythm Pilots") # TODO
+                for C in extra_courses:
+                    if C not in input_courses:
+                        input_courses.append(C)
                 info(f"Input courses (F): {sorted(input_courses)}")
                 info(f"Input courses (C): {sorted(self.courses)}")
                 # does not make sense (general vs. specific course names)
@@ -245,6 +249,15 @@ class Input:
             debug("")
             name = self.translate_teacher_name(row["Who are you?"])
             debug(f"Reading: name {name}")
+            # check that we know the teacher
+            found = False
+            for T,_ in self.TEACHERS:
+                if name == T:
+                    found = True
+                    break
+            if not found:
+                debug(f"Teachers: {self.TEACHERS}")
+                error(f"Unknown teacher {name}")
             d = {}
             d["type"] = "teacher"
             d["ncourses_ideal"] = int(row["How many courses would you ideally like to teach?"])
@@ -276,6 +289,8 @@ class Input:
             for c in input_courses:
                 #debug(f"course {c}")
                 if c == "Rhythm Pilots":
+                    pass
+                elif c == "Charleston 2": # TODO
                     pass
                 else:
                     answer = row[f"What courses would you like to teach? [{c}]"]
@@ -333,8 +348,8 @@ class Input:
         #print(f"Column names: {columns}")
         return result
 
-    def init_teachers_form(self, infile=None):
-        teachers_data = self.read_teachers_input(infile)
+    def init_teachers_form(self, infile=None, extra_courses=None):
+        teachers_data = self.read_teachers_input(infile, extra_courses)
         debug("TEACHERS' ANSWERS:")
         debug(pprint.pformat(teachers_data))
         self.input_data = teachers_data
@@ -472,7 +487,7 @@ class Input:
             debug(f"Person {T}")
             data = self.input_data[T]
             if data["type"] != "teacher":
-                warn(f"Unhandled translation: {T}")
+                error(f"Bad person type? {T}")
                 continue
             self.t_util_max[T] = data["ncourses_max"]
             if self.t_util_max[T] == 0:
@@ -823,10 +838,6 @@ class Model:
                 assert(False)
 
         # SPECIFIC CONSTRAINTS
-
-        # TODO remove, testing only
-        #model.Add(self.c_active[I.Courses["Balboa Beginners"]] == 0)
-        model.Add(self.c_active[I.Courses["Collegiate Shag 1"]] == 0)
 
         for C in I.courses_must_open:
             model.Add(self.c_active[I.Courses[C]] == 1)
