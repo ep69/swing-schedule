@@ -32,14 +32,14 @@ def stop():
     sys.exit(100)
 
 class Input:
-    def init(self, teachers_csv, students_csv=None, extra_courses=None):
+    def init(self, teachers_csv, students_csv=None, extra_courses=[]):
         self.init_constants()
         self.init_form(teachers_csv, students_csv, extra_courses)
         self.init_teachers()
         self.init_rest()
         self.init_penalties()
 
-    def init_form(self, teachers_csv, students_csv=None, extra_courses=None):
+    def init_form(self, teachers_csv, students_csv=None, extra_courses=[]):
         self.init_teachers_form(teachers_csv, extra_courses)
         if students_csv is not None:
             self.init_students_form(students_csv)
@@ -82,10 +82,11 @@ class Input:
             "Blues/Slow Open Training",
             "Rhythm Pilots /1",
             "Rhythm Pilots /2",
-            "Shag/Balboa Open Training",
             ]
         self.courses_solo = [
+            "Shag/Balboa Open Training",
             "Solo",
+            "Authentic Movement",
             "Teachers Training",
             ]
         self.courses_regular = [
@@ -212,7 +213,7 @@ class Input:
                 return
         error(f"Unknown course: '{course}'")
 
-    def read_teachers_input(self, infile=None, extra_courses=None):
+    def read_teachers_input(self, infile=None, extra_courses=[]):
         if infile:
             info(f"Opening {infile}")
             f = open(infile, mode="r")
@@ -247,7 +248,11 @@ class Input:
                 #info(f"Input courses (diff): {set(self.courses)-set(input_courses)-set(self.COURSES_IGNORE)}")
             # handle the input data
             debug("")
-            name = self.translate_teacher_name(row["Who are you?"])
+            who = row["Who are you?"]
+            if who == "IGNORE":
+                debug(f"read_teachers_input: skipping row {row}")
+                continue
+            name = self.translate_teacher_name(who)
             debug(f"Reading: name {name}")
             # check that we know the teacher
             found = False
@@ -348,7 +353,7 @@ class Input:
         #print(f"Column names: {columns}")
         return result
 
-    def init_teachers_form(self, infile=None, extra_courses=None):
+    def init_teachers_form(self, infile=None, extra_courses=[]):
         teachers_data = self.read_teachers_input(infile, extra_courses)
         debug("TEACHERS' ANSWERS:")
         debug(pprint.pformat(teachers_data))
@@ -393,6 +398,8 @@ class Input:
             provided_id = row["Kdo jsi, pokud to chceš říct?"]
             if provided_id:
                 d["provided_id"] = provided_id
+            if provided_id == "IGNORE":
+                continue
             slots = []
             for day in ("Pondělí", "Úterý", "Středa", "Čtvrtek"):
                 daycell = row[f"Jaké dny a časy ti absolutně NEvyhovují? [{day}]"]
@@ -556,9 +563,8 @@ class Input:
             "courses_closed": 150, # TODO adjust
             # serious penalties
             "everybody_teach": 100000,
-            # other
-            # TODO teaching multiple times with the same person? (currently HARD)
-            # TODO integrate bestpref (what people prefer most)
+            # students
+            "stud_bad": 50, # TODO adjust
         }
         self.BOOSTER = 2
 
@@ -1414,6 +1420,76 @@ class Model:
                 model.Add(n_closed == total_courseslots - sum(M.c_active))
                 penalties_courses_closed = [n_closed]
                 penalties[name] = penalties_courses_closed
+            elif name == "stud_bad": # penalty if student cannot attend desired course
+                penalties_stud_bad = []
+                for S, val in I.input_data.items():
+                    if val["type"] != "student":
+                        debug(f"stud_bad: skipping {S}, not a student")
+                        continue
+                    debug(f"stud_bad: student {S}")
+                    if "provided_id" in val:
+                        debug(f"stud_bad: provided_id '{val['provided_id']}'")
+                    else:
+                        debug(f"stud_bad: no id provided")
+                    courses_na = []
+                    for C in val["courses_attend"]:
+                        Cs = [Cspec for Cspec in I.courses if I.is_course_type(Cspec, C)]
+                        if not Cs:
+                            warn(f"stud_bad: no specific course found for {C}")
+                            continue
+                        slots_available = [s for s in range(len(I.slots)) if val["slots"][s] != 0]
+                        course_na = model.NewBoolVar("")
+                        model.Add(sum(M.src[(s,r,I.Courses[CC])] for s in slots_available for r in range(len(I.rooms)) for CC in Cs) == 0).OnlyEnforceIf(course_na)
+                        model.Add(sum(M.src[(s,r,I.Courses[CC])] for s in slots_available for r in range(len(I.rooms)) for CC in Cs) >= 1).OnlyEnforceIf(course_na.Not())
+                        courses_na.append(course_na)
+                    n_courses_na = model.NewIntVar(0, len(I.courses), "")
+                    model.Add(n_courses_na == sum(courses_na))
+                    penalties_stud_bad.append(n_courses_na)
+                penalties[name] = penalties_stud_bad
+                def analysis(src, tc):
+                    result = []
+                    total = 0
+                    total_open = 0
+                    total_ok = 0
+                    for S, val in I.input_data.items():
+                        if val["type"] != "student":
+                            debug(f"analysis stud_bad: skipping {S}, not a student")
+                            continue
+                        debug(f"stud_bad: student {S}")
+                        who = f"{S}"
+                        if "provided_id" in val:
+                            who += f"({val['provided_id']})"
+                            debug(f"analysis stud_bad: provided_id '{val['provided_id']}'")
+                        else:
+                            debug(f"analysis stud_bad: no id provided")
+                        courses_na = []
+                        courses_na_open = []
+                        courses_ok = []
+                        slots_available = [s for s in range(len(I.slots)) if val["slots"][s] != 0]
+                        debug(f"analysis stud_bad: slots_available: {slots_available}")
+                        for C in val["courses_attend"]:
+                            Cs = [Cspec for Cspec in I.courses if I.is_course_type(Cspec, C)]
+                            if not Cs:
+                                warn(f"analysis stud_bad: no specific course found for {C}")
+                                continue
+                            debug(f"analysis stud_bad: specific courses: {', '.join(Cs)}")
+                            if sum(src[(s,r,I.Courses[CC])] for s in slots_available for r in range(len(I.rooms)) for CC in Cs) == 0:
+                                courses_na.append(C)
+                                if any([CCC in I.courses_must_open for CCC in Cs]):
+                                    courses_na_open.append(C)
+                                    total_open += 1
+                            else:
+                                courses_ok.append(C)
+                                total_ok += 1
+                        if courses_na_open:
+                            result.append(f"{who} [{', '.join(courses_na_open)}]")
+                            total += len(courses_na)
+                        if courses_ok:
+                            debug(f"analysis stud_bad: courses OK: {who}: {', '.join(courses_ok)}")
+                    debug(f"Students missed:\n{pprint.pformat(result)}")
+                    info(f"analysis stud_bad: total missed: {total}, open missed: {total_open}, total OK: {total_ok}")
+                    return result
+                penalties_analysis[name] = analysis
 
         self.penalties = penalties
         self.penalties_analysis = penalties_analysis
