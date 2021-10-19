@@ -249,20 +249,20 @@ class Input:
             # handle the input data
             debug("")
             who = row["Who are you?"]
-            if who == "IGNORE":
+            if who.startswith("IGNORE"):
                 debug(f"read_teachers_input: skipping row {row}")
                 continue
             name = self.translate_teacher_name(who)
             debug(f"Reading: name {name}")
-            # check that we know the teacher
-            found = False
-            for T,_ in self.TEACHERS:
-                if name == T:
-                    found = True
-                    break
-            if not found:
-                debug(f"Teachers: {self.TEACHERS}")
-                error(f"Unknown teacher {name}")
+#            # check that we know the teacher
+#            found = False
+#            for T,_ in self.TEACHERS:
+#                if name == T:
+#                    found = True
+#                    break
+#            if not found:
+#                debug(f"Teachers: {self.TEACHERS}")
+#                error(f"Unknown teacher {name}")
             d = {}
             d["type"] = "teacher"
             d["ncourses_ideal"] = int(row["How many courses would you ideally like to teach?"])
@@ -560,11 +560,11 @@ class Input:
             # person-related
             "teach_together": 25,
             # overall schedule
-            "courses_closed": 150, # TODO adjust
+            "courses_closed": 150,
             # serious penalties
             "everybody_teach": 100000,
             # students
-            "stud_bad": 50, # TODO adjust
+            "stud_bad": 50,
         }
         self.BOOSTER = 2
 
