@@ -127,8 +127,8 @@ class Input:
 #            "LH 4 - TODO /2",
 #            "LH 5",
 #            "Solo",
-#            "Airsteps 1",
-#            "Airsteps 2",
+            "Airsteps 1", # FIXME
+            "Airsteps 2", # FIXME
 #            "Saint Louis Shag 1",
 #            "Saint Louis Shag 2",
 #            "Balboa Advanced",
@@ -1156,7 +1156,7 @@ class Model:
                     t = I.Teachers[T]
                     splitok = I.input_data[T]["splitok"]
                     if splitok == 1:
-                        error(f"Teacher {T} wants split, not implemented yet")
+                        warn(f"Teacher {T} wants split, not implemented yet")
                         # TODO
                     elif splitok == 0:
                         info(f"Teacher {T} indifferent to split")
