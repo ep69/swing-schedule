@@ -102,8 +102,8 @@ class Input:
             "LH 3 - Musicality",
             "LH 3 - Charleston",
             "LH 3 - Cool Moves and Styling",
-            "LH 4 - Swingout Clinic",
-            "LH 4 - Musicality",
+            "LH 4 - more technical",
+            "LH 4 - more philosophical",
             "LH 5",
             "Charleston 2",
             "Collegiate Shag 1",
@@ -124,7 +124,6 @@ class Input:
 #            #"LH 1 - English",
 #            #"LH 2.5 - Swingout /2", #
 #            #"LH 3 - Musicality",
-#            "LH 4 - TODO /2",
 #            "LH 5",
 #            "Solo",
             "Airsteps 1", # FIXME
@@ -1345,7 +1344,11 @@ class Model:
                 # courses that some teachers would like to attend
                 courses_attend = [I.input_data[T]["courses_attend"] for T in I.teachers_active]
                 courses_attend = [item for sl in courses_attend for item in sl if item != ""] # flatten sublists
-                courses_attend = list(set(courses_attend)) # unique course names
+                courses_attend = set(courses_attend) # unique course names
+                if [C for C in courses_attend if C.startswith("LH 4")]:
+                    courses_attend -= set(["LH 4"])
+                    courses_attend |= set(["LH 4 - more technical", "LH 4 - more philosophical"])
+                    error(f"attend_free: courses_attend {courses_attend}")
                 debug(f"attend_free: courses_attend {courses_attend}")
                 penalties_attend_free = []
                 for C in courses_attend:
