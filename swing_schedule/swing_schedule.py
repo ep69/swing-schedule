@@ -80,13 +80,14 @@ class Input:
         self.courses_open = [
             "Lindy/Charleston Open Training",
             "Blues/Slow Open Training",
-            "Rhythm Pilots /1",
-            "Rhythm Pilots /2",
+            #"Rhythm Pilots /1",
+            #"Rhythm Pilots /2",
             ]
         self.courses_solo = [
             "Shag/Balboa Open Training",
-            "Solo",
-            "Authentic Movement",
+            "Solo - choreography",
+            "Solo - improvisation",
+            #"Authentic Movement",
             "Teachers Training",
             ]
         self.courses_regular = [
@@ -107,6 +108,7 @@ class Input:
             "LH 5",
             "Charleston 2",
             "Collegiate Shag 1",
+            "Collegiate Shag 1.5",
             "Collegiate Shag 2",
             "Balboa Beginners",
             "Balboa Intermediate",
@@ -125,7 +127,6 @@ class Input:
 #            #"LH 2.5 - Swingout /2", #
 #            #"LH 3 - Musicality",
 #            "LH 5",
-#            "Solo",
             "Airsteps 1", # FIXME
             "Airsteps 2", # FIXME
 #            "Saint Louis Shag 1",
@@ -144,40 +145,17 @@ class Input:
 
     def init_teachers(self):
         debug("Initializing teachers")
-
-        if not hasattr(self, "TEACHERS"): # if not overriden in child class
-            debug(f"Initializing TEACHERS database")
-            # name, role
-            self.TEACHERS = [
-                ("LEADER", "lead"),
-                ("FOLLOW", "follow"),
-                ("Karel-X.", "lead"),
-                ("Roman", "lead"),
-                ("Bart", "lead"),
-                ("Evzen-E.", "lead"),
-                ("Krasomil", "lead"),
-                ("Vilda", "lead"),
-                ("Radek", "lead"),
-                ("Karla", "follow"),
-                ("Hermiona", "both"),
-                ("Eva", "follow"),
-                ("Dana", "follow"),
-                ("Wendy", "follow"),
-                ("Jana", "follow"),
-                ("Hanka", "follow"),
-                ("Lenka-V.", "follow"),
-                ("Lucka", "follow"),
-                ("Zora", "follow"),
-                ("Martina", "follow"),
-                ]
-
         self.teachers = self.teachers_active
         debug(f"Active teachers: {self.teachers_active}")
-        self.teachers_lead = [t[0] for t in self.TEACHERS if t[1] == "lead" and t[0] in self.teachers]
+        self.teachers_lead = [T for T in self.teachers if self.input_data[T]["role"] == "lead"]
         debug(f"Leaders: {self.teachers_lead}")
-        self.teachers_follow = [t[0] for t in self.TEACHERS if t[1] == "follow" and t[0] in self.teachers]
+        self.teachers_lead_primary = [T for T in self.teachers if self.input_data[T]["role"] in ("lead", "both/lead")]
+        debug(f"Primary leaders: {self.teachers_lead_primary}")
+        self.teachers_follow = [T for T in self.teachers if self.input_data[T]["role"] == "follow"]
         debug(f"Follows: {self.teachers_follow}")
-        self.teachers_both = [t[0] for t in self.TEACHERS if t[1] == "both" and t[0] in self.teachers]
+        self.teachers_follow_primary = [T for T in self.teachers if self.input_data[T]["role"] in ("follow", "both/follow")]
+        debug(f"Primary follows: {self.teachers_follow_primary}")
+        self.teachers_both = [T for T in self.teachers if self.input_data[T]["role"].startswith("both/")]
         debug(f"Both: {self.teachers_both}")
         assert(set(self.teachers) >= set(self.teachers_lead + self.teachers_follow + self.teachers_both))
         assert(len(set(self.teachers_lead) & set(self.teachers_follow)) == 0)
@@ -201,6 +179,8 @@ class Input:
     def is_course_type(self, Cspec, Cgen):
         if Cspec.endswith("English"):
             #debug(f"is_course_type: {Cspec} {Cgen} {Cgen == Cspec}")
+            return Cgen == Cspec
+        if Cspec.startswith("Collegiate Shag"):
             return Cgen == Cspec
         #debug(f"is_course_type: {Cspec} {Cgen} {Cspec.startswith(Cgen)}")
         return Cspec.startswith(Cgen)
@@ -231,7 +211,8 @@ class Input:
                 # check courses when handling the first row
                 columns = list(row.keys())
                 for col in columns:
-                    if col.startswith("What courses would you like to teach?"):
+                    debug(f"Column: {col}")
+                    if col.startswith("What courses would you like to teach in your primary role?"):
                         course = col.split("[")[1].split("]")[0]
                         if course in self.COURSES_IGNORE:
                             continue
@@ -289,30 +270,47 @@ class Input:
                 d["splitok"] = 0
             else:
                 error("Unknown splitok answer")
-            courses_teach = {}
+
+            # role
+            role = row["What is your dancing role?"]
+            if role == "Lead only":
+                role = "lead"
+            elif role == "Follow only":
+                role = "follow"
+            elif role.startswith("Primarily lead"):
+                role = "both/lead"
+            elif role.startswith("Primarily follow"):
+                role = "both/follow"
+            else:
+                error(f"Unknown role {role}")
+            d["role"] = role
+
+            courses_teach_primary = {}
             for c in input_courses:
                 #debug(f"course {c}")
-                if c == "Rhythm Pilots":
-                    pass
-                elif c == "Charleston 2": # TODO
-                    pass
-                else:
-                    answer = row[f"What courses would you like to teach? [{c}]"]
-                    if not answer:
-                        warn(f"{name} provided no answer for {c}, defaulting to 0")
-                        answer_num = 0
-                    elif len(answer) >= 1:
-                        first = answer[0]
-                        if first in ("0", "1", "2", "3"):
-                            answer_num = int(first)
-                        else:
-                            error(f"Unexpected first char in answer: '{answer}'")
+#                if c == "Rhythm Pilots":
+#                    pass
+#                elif c == "Charleston 2": # TODO
+#                    pass
+#                else:
+                answer = row[f"What courses would you like to teach in your primary role? [{c}]"]
+                if not answer:
+                    warn(f"{name} provided no answer for {c}, defaulting to 0")
+                    answer_num = 0
+                elif len(answer) >= 1:
+                    first = answer[0]
+                    if first in ("0", "1", "2", "3"):
+                        answer_num = int(first)
                     else:
-                        # should not happen
-                        error(f"Unexpected answer: '{answer}'")
-                courses_teach[c] = answer_num
-                #courses_teach[c] = int(row[f"What courses would you like to teach? [{c}]"][0])
-            d["courses_teach"] = courses_teach
+                        error(f"Unexpected first char in answer: '{answer}'")
+                else:
+                    # should not happen
+                    error(f"Unexpected answer: '{answer}'")
+                courses_teach_primary[c] = answer_num
+                #courses_teach_primary[c] = int(row[f"What courses would you like to teach? [{c}]"][0])
+            d["courses_teach_primary"] = courses_teach_primary
+            courses_teach_secondary = []
+            d["courses_teach_secondary"] = [c.strip() for c in row["What courses would you like to teach in your secondary role?"].split(",") if c]
             bestpref = row["What preference is the most important for you?"]
             if bestpref.startswith("Time"):
                 d["bestpref"] = "time"
@@ -332,12 +330,19 @@ class Input:
                 else:
                     debug(f"NOT removing: {c}")
             #debug(f"Courses attend after: {d['courses_attend']}")
+            if "LH 4" in d["courses_attend"]:
+                d["courses_attend"].remove("LH 4")
+                d["courses_attend"].append("LH 4 - more technical")
+                d["courses_attend"].append("LH 4 - more philosophical")
+            if "Solo" in d["courses_attend"]:
+                d["courses_attend"].remove("Solo")
+                d["courses_attend"].append("Solo - choreography")
+                d["courses_attend"].append("Solo - improvisation")
             for c in d["courses_attend"]:
-                debug(f"Check course 2: {c}")
                 self.check_course(c)
             teach_together = row["Who would you like to teach with?"]
             d["teach_together"] = [self.translate_teacher_name(name.strip()) for name in teach_together.split(",") if name]
-            d["teach_not_together"] = [self.translate_teacher_name(name) for name in row["Are there any people you cannot teach with?"].split(",") if name not in ["", "-", "No", "není", "nah", "ne", "no", "None"]]
+            d["teach_not_together"] = [self.translate_teacher_name(name) for name in row["Are there any people you cannot teach with?"].split(",") if name]
             debug(f"Adding {name} to result")
             self.teachers_active.append(name)
             result[name] = d
@@ -463,9 +468,19 @@ class Input:
         self.tc_pref = {}
         # course C can be taught only by Ts
         self.ct_possible = {}
+        self.ct_possible_lead = {}
+        self.ct_possible_follow = {}
+        assert(set(self.teachers) == set(self.teachers_active))
         for C in self.courses:
             if C not in self.courses_open:
                 self.ct_possible[C] = list(set(self.teachers_active))
+            if C in self.courses_regular:
+                # we will start with primary people and add sceondary later
+                self.ct_possible_lead[C] = list(self.teachers_lead_primary)
+                self.ct_possible_follow[C] = list(self.teachers_follow_primary)
+            #else:
+                #self.ct_possible_lead[C] = []
+                #self.ct_possible_follow[C] = []
         # course C must not take place in room R
         # TODO improve - some of these actualy fake course-venues constraints
         self.cr_not = {}
@@ -503,22 +518,57 @@ class Input:
                 self.teachers_active.remove(T)
             else:
                 self.t_util_ideal[T] = data["ncourses_ideal"]
-                courses_teach = data["courses_teach"]
+                courses_teach_primary = data["courses_teach_primary"]
                 courses_pref = {}
-                for (Cgen, v) in courses_teach.items():
+                for (Cgen, v) in courses_teach_primary.items():
+                    #debug(f"Cgen: {Cgen}")
                     for Cspec in self.courses_regular + self.courses_solo:
+                        #debug(f"Cspec 1: {Cspec}")
                         if self.is_course_type(Cspec, Cgen):
+                            #debug(f"Cspec 2: {Cspec}")
                             courses_pref[Cspec] = v
                             debug(f"courses_pref[{Cspec}] = {v}")
                             if v == 0:
+                                #debug(f"Cspec 3: {Cspec}")
                                 # HARD preference
-                                if T in self.ct_possible[Cspec]:
-                                    self.ct_possible[Cspec].remove(T)
-                                    assert(T not in self.ct_possible[Cspec])
+                                if Cspec in self.courses_regular:
+                                    if T in self.teachers_lead_primary:
+                                        if T in self.ct_possible_lead[Cspec]:
+                                            self.ct_possible_lead[Cspec].remove(T)
+                                            #self.ct_possible_lead[Cspec] = list(set(self.ct_possible_lead[Cspec]) - set([T]))
+                                            assert(T not in self.ct_possible_lead[Cspec])
+                                    elif T in self.teachers_follow_primary:
+                                        if T in self.ct_possible_follow[Cspec]:
+                                            self.ct_possible_follow[Cspec].remove(T)
+                                            #self.ct_possible_follow[Cspec] = list(set(self.ct_possible_follow[Cspec]) - set([T]))
+                                            assert(T not in self.ct_possible_follow[Cspec])
+                                    else:
+                                        error(f"No primary role for teacher {T}")
+                                elif Cspec in self.courses_solo:
+                                    if T in self.ct_possible[Cspec]:
+                                        self.ct_possible[Cspec].remove(T)
+                                        assert(T not in self.ct_possible[Cspec])
+                                else:
+                                    error(f"Course {Cspec} is neither regular nor solo")
                             elif v <= 3:
                                 pass
                             else:
-                                error(f"Unexpected course preference value: teacher {T} course {Cgen} value {v}")
+                                error(f"Unexpected primary course preference value: teacher {T} course {Cgen} value {v}")
+                for Cgen in data["courses_teach_secondary"]:
+                    for Cspec in self.courses_regular: # does not make sense for solo courses
+                        if self.is_course_type(Cspec, Cgen):
+                                if T in self.teachers_lead_primary:
+                                    if T not in self.ct_possible_follow[Cspec]:
+                                        debug(f"Appending to {Cspec}: follow {T}")
+                                        self.ct_possible_follow[Cspec].append(T)
+                                        assert(T in self.ct_possible_follow[Cspec])
+                                elif T in self.teachers_follow_primary:
+                                    if T not in self.ct_possible_lead[Cspec]:
+                                        debug(f"Appending to {Cspec}: lead {T}")
+                                        self.ct_possible_lead[Cspec].append(T)
+                                        assert(T in self.ct_possible_lead[Cspec])
+                                else:
+                                    error(f"No primary role for teacher {T}")
                 self.tc_pref[T] = courses_pref
                 for d in data["teach_not_together"]:
                     if d in self.input_data:
@@ -537,6 +587,9 @@ class Input:
         debug("CT_POSSIBLE:")
         for C in self.courses_regular + self.courses_solo:
             debug(f"ct_possible {C}: {', '.join(self.ct_possible[C])}")
+            if C in self.courses_regular:
+                debug(f"ct_possible_lead {C}: {', '.join(self.ct_possible_lead[C])}")
+                debug(f"ct_possible_follow {C}: {', '.join(self.ct_possible_follow[C])}")
             # attendance done directly through input_data
 
     def init_penalties(self):
@@ -568,6 +621,10 @@ class Input:
         self.BOOSTER = 2
 
 
+class Result:
+    pass
+
+
 class Model:
     def init(self, I):
         self.I = I
@@ -587,6 +644,16 @@ class Model:
         for c in range(len(I.courses)):
             for t in range(len(I.teachers)):
                 self.tc[(t,c)] = model.NewBoolVar("CT:t%ic%i" % (t,c))
+        # course C is taught by teacher T as a leader
+        self.tc_lead = {}
+        for c in range(len(I.courses)):
+            for t in range(len(I.teachers)):
+                self.tc_lead[(t,c)] = model.NewBoolVar("")
+        # course C is taught by teacher T as a follow
+        self.tc_follow = {}
+        for c in range(len(I.courses)):
+            for t in range(len(I.teachers)):
+                self.tc_follow[(t,c)] = model.NewBoolVar("")
         # teacher T teaches in slot S course C
         self.tsc = {}
         for s in range(len(I.slots)):
@@ -681,6 +748,21 @@ class Model:
                 for t in range(len(I.teachers)):
                     model.AddBoolAnd([hit, self.tc[(t,c)]]).OnlyEnforceIf(self.tsc[(t,s,c)])
                     model.AddBoolOr([hit.Not(), self.tc[(t,c)].Not()]).OnlyEnforceIf(self.tsc[(t,s,c)].Not())
+        for c in range(len(I.courses)):
+            C = I.courses[c]
+            if C in I.courses_regular:
+                # regular course => one lead, one follow
+                model.Add(sum(self.tc_lead[(t,c)] for t in range(len(I.teachers))) == 1).OnlyEnforceIf(self.c_active[c])
+                model.Add(sum(self.tc_follow[(t,c)] for t in range(len(I.teachers))) == 1).OnlyEnforceIf(self.c_active[c])
+                for t in range(len(I.teachers)):
+                    # TODO why XOr does not work?
+                    #model.AddBoolXOr([self.tc_lead[(t,c)], self.tc_follow[(t,c)]]).OnlyEnforceIf(self.tc[(t,c)])
+                    model.AddBoolOr([self.tc_lead[(t,c)], self.tc_follow[(t,c)]]).OnlyEnforceIf(self.tc[(t,c)])
+                    model.AddBoolAnd([self.tc_lead[(t,c)].Not(), self.tc_follow[(t,c)].Not()]).OnlyEnforceIf(self.tc[(t,c)].Not())
+            else:
+                # non-regular course => no roles
+                model.Add(sum(self.tc_lead[(t,c)] for t in range(len(I.teachers))) == 0)
+                model.Add(sum(self.tc_follow[(t,c)] for t in range(len(I.teachers))) == 0)
         # inferring TS info
         for s in range(len(I.slots)):
             for t in range(len(I.teachers)):
@@ -880,6 +962,24 @@ class Model:
             teachers_not = teachers_all - set(teachers_can)
             # no other teacher can teach C
             model.Add(sum(self.tc[(t,c)] for t in teachers_not) == 0)
+        for (C, Ts) in I.ct_possible_lead.items():
+            c = I.Courses[C]
+            teachers_can = []
+            for T in Ts:
+                t = I.Teachers[T]
+                teachers_can.append(t)
+            teachers_not = teachers_all - set(teachers_can)
+            # no other teacher can teach C
+            model.Add(sum(self.tc_lead[(t,c)] for t in teachers_not) == 0)
+        for (C, Ts) in I.ct_possible_follow.items():
+            c = I.Courses[C]
+            teachers_can = []
+            for T in Ts:
+                t = I.Teachers[T]
+                teachers_can.append(t)
+            teachers_not = teachers_all - set(teachers_can)
+            # no other teacher can teach C
+            model.Add(sum(self.tc_follow[(t,c)] for t in teachers_not) == 0)
 
         for T1, T2 in I.tt_not_together:
             for c in range(len(I.courses)):
@@ -1348,7 +1448,7 @@ class Model:
                 if [C for C in courses_attend if C.startswith("LH 4")]:
                     courses_attend -= set(["LH 4"])
                     courses_attend |= set(["LH 4 - more technical", "LH 4 - more philosophical"])
-                    error(f"attend_free: courses_attend {courses_attend}")
+                    #error(f"attend_free: courses_attend {courses_attend}")
                 debug(f"attend_free: courses_attend {courses_attend}")
                 penalties_attend_free = []
                 for C in courses_attend:
@@ -1516,16 +1616,22 @@ class Model:
         def OnSolutionCallback(self):
             I = self.I
             M = self.M
+            R = Result()
             self.count += 1
-            result_src = {}
+            R.src = {}
             for s in range(len(I.slots)):
                 for r in range(len(I.rooms)):
                     for c in range(len(I.courses)):
-                            result_src[(s,r,c)] = self.Value(M.src[(s,r,c)])
-            result_tc = {}
+                            R.src[(s,r,c)] = self.Value(M.src[(s,r,c)])
+            debug(pprint.pformat(R))
+            R.tc = {}
+            R.tc_lead = {}
+            R.tc_follow = {}
             for t in range(len(I.teachers)):
                 for c in range(len(I.courses)):
-                    result_tc[(t,c)] = self.Value(M.tc[(t,c)])
+                    R.tc[(t,c)] = self.Value(M.tc[(t,c)])
+                    R.tc_lead[(t,c)] = self.Value(M.tc_lead[(t,c)])
+                    R.tc_follow[(t,c)] = self.Value(M.tc_follow[(t,c)])
             for P in I.people:
                 p = I.Teachers[P]
                 teach_courses = [I.courses[c] for c in range(len(I.courses)) if self.Value(M.tc[(p,c)])]
@@ -1566,17 +1672,22 @@ class Model:
             debug(f"Courses openness and indices")
             for c in range(len(I.courses)):
                 debug(f"{I.courses[c]: <30}: {self.Value(M.c_active[c])} {self.Value(M.cs[c])}")
-            result_penalties = {}
+            R.penalties = {}
             # FIXME how to access penalties?
             for (name, l) in M.penalties.items():
                 v = sum([self.Value(p) for p in l])
                 coeff = I.PENALTIES[name]
-                result_penalties[name] = (coeff, v)
+                R.penalties[name] = (coeff, v)
             print(f"No: {self.count}")
             print(f"Wall time: {self.WallTime()}")
             #print(f"Branches: {self.NumBranches()}")
             #print(f"Conflicts: {self.NumConflicts()}")
-            def print_solution(src, tc, penalties, penalties_analysis, objective=None, utilization=True):
+            def print_solution(R, penalties_analysis, objective=None, utilization=True):
+                src = R.src
+                tc = R.tc
+                tc_lead = R.tc_lead
+                tc_follow = R.tc_follow
+                penalties = R.penalties
                 if objective:
                     print(f"Objective value: {objective}")
                 for s in range(len(I.slots)):
@@ -1593,11 +1704,17 @@ class Model:
                                             Ts.append(I.teachers[t])
                                             break
                                 elif I.courses[c] in I.courses_regular:
+                                    #t_lead = "UNKNOWN"
+                                    #t_follow = "UNKNOWN"
                                     for t in range(len(I.teachers)):
-                                        if tc[(t,c)]:
-                                            Ts.append(I.teachers[t])
-                                if len(Ts) == 2 and (Ts[0] in I.teachers_follow or Ts[1] in I.teachers_lead):
-                                    Ts[0], Ts[1] = Ts[1], Ts[0]
+                                        if tc_lead[(t,c)]:
+                                            t_lead = t
+                                        if tc_follow[(t,c)]:
+                                            t_follow = t
+                                    Ts.append(I.teachers[t_lead])
+                                    Ts.append(I.teachers[t_follow])
+                                #if len(Ts) == 2 and (Ts[0] in I.teachers_follow or Ts[1] in I.teachers_lead):
+                                    #Ts[0], Ts[1] = Ts[1], Ts[0]
                                 if len(Ts) == 2:
                                     Ts_print = f"{Ts[0] :<9}+ {Ts[1]}"
                                 else:
@@ -1625,7 +1742,8 @@ class Model:
                         print(f"{v}: {', '.join(t for t in tn if tn[t] == v)}")
                 print(f"TOTAL: {total}")
 
-            print_solution(result_src, result_tc, result_penalties, M.penalties_analysis, self.ObjectiveValue())
+            debug(pprint.pformat(R))
+            print_solution(R, M.penalties_analysis, self.ObjectiveValue())
             print()
 
     def solve(self):
