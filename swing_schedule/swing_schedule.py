@@ -145,8 +145,7 @@ class Input:
 
     def init_teachers(self):
         debug("Initializing teachers")
-        self.teachers = self.teachers_active
-        debug(f"Active teachers: {self.teachers_active}")
+        debug(f"Active teachers: {self.teachers}")
         self.teachers_lead = [T for T in self.teachers if self.input_data[T]["role"] == "lead"]
         debug(f"Leaders: {self.teachers_lead}")
         self.teachers_lead_primary = [T for T in self.teachers if self.input_data[T]["role"] in ("lead", "both/lead")]
@@ -167,7 +166,7 @@ class Input:
             self.Teachers[t] = i
 
         # caring only about teachers for now
-        self.people = self.teachers_active
+        self.people = self.teachers
 
 
     def translate_teacher_name(self, name):
@@ -200,7 +199,7 @@ class Input:
             f = sys.stdin
 
         result = {}
-        self.teachers_active = []
+        self.teachers= []
         input_courses = [] # courses
         n = 0
 
@@ -342,14 +341,18 @@ class Input:
                 self.check_course(c)
             teach_together = row["Who would you like to teach with?"]
             d["teach_together"] = [self.translate_teacher_name(name.strip()) for name in teach_together.split(",") if name]
+            if name in d["teach_together"]:
+                d["teach_together"].remove(name)
             d["teach_not_together"] = [self.translate_teacher_name(name) for name in row["Are there any people you cannot teach with?"].split(",") if name]
+            if name in d["teach_not_together"]:
+                d["teach_not_together"].remove(name)
             debug(f"Adding {name} to result")
-            self.teachers_active.append(name)
+            self.teachers.append(name)
             result[name] = d
         self.teacher_courses = input_courses
         debug(f"Number of lines: {n}")
         debug(f"Result: {'|'.join(result)}")
-        debug(f"Active teachers: {set(self.teachers_active)}")
+        debug(f"Active teachers: {set(self.teachers)}")
 
         if f is not sys.stdin:
             f.close()
@@ -470,10 +473,10 @@ class Input:
         self.ct_possible = {}
         self.ct_possible_lead = {}
         self.ct_possible_follow = {}
-        assert(set(self.teachers) == set(self.teachers_active))
+        #assert(set(self.teachers) == set(self.teachers_active))
         for C in self.courses:
             if C not in self.courses_open:
-                self.ct_possible[C] = list(set(self.teachers_active))
+                self.ct_possible[C] = list(set(self.teachers))
             if C in self.courses_regular:
                 # we will start with primary people and add sceondary later
                 self.ct_possible_lead[C] = list(self.teachers_lead_primary)
@@ -503,8 +506,7 @@ class Input:
         self.courses_same = []
 
         # translate input data to variables understood by the rest of the script
-        #self.teachers_active = []
-        for T in set(self.teachers_active):
+        for T in set(self.teachers):
             debug(f"Person {T}")
             data = self.input_data[T]
             if data["type"] != "teacher":
@@ -515,7 +517,7 @@ class Input:
                 # could be warning, it is probably legit to just say 0 max_courses
                 # but if it happens, logic should be moved to CSV parsing
                 error(f"Removing (probably too late) the inactive teacher: {T}")
-                self.teachers_active.remove(T)
+                self.teachers.remove(T)
             else:
                 self.t_util_ideal[T] = data["ncourses_ideal"]
                 courses_teach_primary = data["courses_teach_primary"]
@@ -667,34 +669,34 @@ class Model:
                 self.ts[(t,s)] = model.NewBoolVar("TS:t%is%i" % (t,s))
         # person P attends course C
         self.ac = {}
-        for p in range(len(I.teachers)): # TODO people vs. teachers vs. teachers_active
+        for p in range(len(I.teachers)): # TODO people vs. teachers
             for c in range(len(I.courses)):
                 self.ac[(p,c)] = model.NewBoolVar("")
         # person P teaches or attends course C
         self.pc = {}
-        for p in range(len(I.teachers)): # TODO people vs. teachers vs. teachers_active
+        for p in range(len(I.teachers)): # TODO people vs. teachers
             for c in range(len(I.courses)):
                 self.pc[(p,c)] = model.NewBoolVar("")
         # person P attends or teaches course C in slot S
         self.psc = {}
-        for p in range(len(I.teachers)): # TODO people vs. teachers vs. teachers_active
+        for p in range(len(I.teachers)): # TODO people vs. teachers
             for s in range(len(I.slots)):
                 for c in range(len(I.courses)):
                     self.psc[(p,s,c)] = model.NewBoolVar("")
         # person P attends or teaches in slot S
         self.ps = {}
         for s in range(len(I.slots)):
-            for p in range(len(I.teachers)): # TODO people vs. teachers vs. teachers_active
+            for p in range(len(I.teachers)): # TODO people vs. teachers
                 self.ps[(p,s)] = model.NewBoolVar("PS:p%is%i" % (p,s))
         # person P occupied according to slot preferences in slot S
         self.ps_occupied = {}
         for s in range(len(I.slots)):
-            for p in range(len(I.teachers)): # TODO people vs. teachers vs. teachers_active
+            for p in range(len(I.teachers)): # TODO people vs. teachers
                 self.ps_occupied[(p,s)] = model.NewBoolVar("PS:p%is%i" % (p,s))
         # person P not available (teaches or bad slot preferences) in slot S
         self.ps_na = {}
         for s in range(len(I.slots)):
-            for p in range(len(I.teachers)): # TODO people vs. teachers vs. teachers_active
+            for p in range(len(I.teachers)): # TODO people vs. teachers
                 self.ps_na[(p,s)] = model.NewBoolVar("PS:p%is%i" % (p,s))
         # teacher T teaches on day D
         self.td = {}
@@ -704,7 +706,7 @@ class Model:
         # person P is occupied (teaches or attends courses) on day D
         self.pd = {}
         for d in range(len(I.days)):
-            for p in range(len(I.teachers)): # TODO people vs. teachers vs. teachers_active
+            for p in range(len(I.teachers)): # TODO people vs. teachers
                 self.pd[(p,d)] = model.NewBoolVar("")
         # course C takes place in slot S
         self.cs = []
@@ -1169,6 +1171,7 @@ class Model:
                         continue
                     else:
                         error(f"Unknown mindays value: {mindays} for teacher {T}")
+                    # TODO - teaches_days could be useful general variable
                     teaches_days = model.NewIntVar(0, len(I.days), "TD:%i" % t)
                     model.Add(teaches_days == sum(M.td[(t,d)] for d in range(len(I.days))))
                     teaches_minus_1 = model.NewIntVar(0, len(I.days), "Tm1:%i" % t)
@@ -1434,15 +1437,21 @@ class Model:
             elif name == "everybody_teach":
                 penalties_everybody_teach = []
                 # fake teachers
-                for T in I.teachers_active:
-                    if T in I.teachers:
-                        penalties_everybody_teach.append(M.does_not_teach[I.Teachers[T]])
-                    else:
-                        warn(f"Active teacher {T} not among considered teachers!")
+                for T in I.teachers:
+                    penalties_everybody_teach.append(M.does_not_teach[I.Teachers[T]])
                 penalties[name] = penalties_everybody_teach
+                def analysis(src, tc):
+                    result = []
+                    for t in range(len(I.teachers)):
+                        T = I.teachers[t]
+                        courses_bad = []
+                        if not [(tf,cf) for (tf,cf) in tc if tc[(tf,cf)] and tf == t]:
+                            result.append(f"{T}")
+                    return result
+                penalties_analysis[name] = analysis
             elif name == "attend_free": # penalty if interested in attending cannot attend (they teach something else in the same time)
                 # courses that some teachers would like to attend
-                courses_attend = [I.input_data[T]["courses_attend"] for T in I.teachers_active]
+                courses_attend = [I.input_data[T]["courses_attend"] for T in I.teachers]
                 courses_attend = [item for sl in courses_attend for item in sl if item != ""] # flatten sublists
                 courses_attend = set(courses_attend) # unique course names
                 if [C for C in courses_attend if C.startswith("LH 4")]:
@@ -1453,7 +1462,7 @@ class Model:
                 penalties_attend_free = []
                 for C in courses_attend:
                     teachers_attend = []
-                    for T in I.teachers_active:
+                    for T in I.teachers:
                         if C in I.input_data[T]["courses_attend"]:
                             teachers_attend.append(T)
                     debug(f"attend_free: course {C}: {', '.join(teachers_attend)}")
@@ -1494,10 +1503,14 @@ class Model:
                     if I.input_data[T]["bestpref"] == "person":
                         debug(f"Boosting people preferences for {T}")
                         boost = I.BOOSTER
+                    if not I.tt_together[T]:
+                        debug(f"teach_together: no preference => no penalty for {T}")
+                        boost = 0
                     boosted = model.NewIntVar(0, I.BOOSTER, "")
                     model.Add(boosted == boost * nobody)
                     penalties_teach_together.append(boosted)
                 penalties[name] = penalties_teach_together
+                #stop()
                 def analysis(src, tc):
                     result = []
                     for T in I.tt_together:
@@ -1736,7 +1749,7 @@ class Model:
                     tn = {}
                     #for t in range(len(I.teachers)):
                         #tn[I.teachers[t]] = sum(tc[t,c] for c in range(len(I.courses)))
-                    for T in I.teachers_active:
+                    for T in I.teachers:
                         tn[T] = sum(tc[I.Teachers[T],c] for c in range(len(I.courses)))
                     for v in sorted(set(tn.values())):
                         print(f"{v}: {', '.join(t for t in tn if tn[t] == v)}")
@@ -1762,7 +1775,7 @@ class Model:
         print(f"Teachers' utilization:")
         for n in range(len(self.I.slots)):
             Ts = []
-            for T in self.I.teachers_active:
+            for T in self.I.teachers:
                 if solver.Value(self.teach_num[self.I.Teachers[T]]) == n:
                     Ts.append(T)
             if Ts:
