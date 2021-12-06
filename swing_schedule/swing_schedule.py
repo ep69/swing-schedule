@@ -45,6 +45,16 @@ class Input:
             self.init_students_form(students_csv)
         info(pprint.pformat(self.input_data))
 
+    courses_extra = {}
+
+    def add_extra_course(self, course, type, teachers):
+        debug(f"add_extra_course: {course} type {type} teachers {', '.join(teachers)}")
+        if type not in ("open", "solo", "regular"):
+            error(f"add_extra_course: unknown type {type}")
+        self.courses_extra[course] = {}
+        self.courses_extra[course]["type"] = type
+        self.courses_extra[course]["teachers"] = teachers
+
     def init_constants(self):
         #self.days = ["Monday", "Tuesday", "Wednesday", "Thursday"]
         self.days = ["Mon", "Tue", "Wed", "Thu"]
@@ -127,18 +137,36 @@ class Input:
 #            #"LH 2.5 - Swingout /2", #
 #            #"LH 3 - Musicality",
 #            "LH 5",
-            "Airsteps 1", # FIXME
-            "Airsteps 2", # FIXME
+#            "Airsteps 1", # FIXME
+#            "Airsteps 2", # FIXME
 #            "Saint Louis Shag 1",
 #            "Saint Louis Shag 2",
 #            "Balboa Advanced",
 #            "Slow Balboa",
 #            "Blues 2",
+#            "Authentic Movement",
+            "Zumba s Tomem",
         ]
+        for C, d in self.courses_extra.items():
+            debug(f"init_constants: extra course {C}")
+            type = d["type"]
+            teachers = d["teachers"]
+            if type == "open":
+                self.courses_open.append(C)
+            elif type == "solo":
+                self.courses_solo.append(C)
+            elif type == regular:
+                self.courses_regular.append(C)
+            else:
+                error(f"init_constants: unknown extra course {C} type {type}")
         self.courses_open = list(set(self.courses_open)-set(self.COURSES_IGNORE))
+        debug(f"init_constants: courses_open: {', '.join(self.courses_open)}")
         self.courses_solo = list(set(self.courses_solo)-set(self.COURSES_IGNORE))
+        debug(f"init_constants: courses_solo: {', '.join(self.courses_solo)}")
         self.courses_regular = list(set(self.courses_regular)-set(self.COURSES_IGNORE))
+        debug(f"init_constants: courses_regular: {', '.join(self.courses_regular)}")
         self.courses = self.courses_regular + self.courses_solo + self.courses_open
+        debug(f"init_constants: courses: {', '.join(self.courses)}")
         self.Courses = {}
         for (i, c) in enumerate(self.courses):
             self.Courses[c] = i
@@ -187,9 +215,9 @@ class Input:
     def check_course(self, course):
         for Cspec in self.courses:
             if self.is_course_type(Cspec, course):
-                debug(f"Course preference {course} maps, e.g to {Cspec}")
+                debug(f"check_course: course preference {course} maps, e.g to {Cspec}")
                 return
-        error(f"Unknown course: '{course}'")
+        error(f"check_course: unknown course: '{course}'")
 
     def read_teachers_input(self, infile=None, extra_courses=[]):
         if infile:
@@ -285,16 +313,16 @@ class Input:
             d["role"] = role
 
             courses_teach_primary = {}
-            for c in input_courses:
-                #debug(f"course {c}")
-#                if c == "Rhythm Pilots":
+            for C in input_courses:
+                #debug(f"course {C}")
+#                if C == "Rhythm Pilots":
 #                    pass
-#                elif c == "Charleston 2": # TODO
+#                elif C == "Charleston 2": # TODO
 #                    pass
 #                else:
-                answer = row[f"What courses would you like to teach in your primary role? [{c}]"]
+                answer = row[f"What courses would you like to teach in your primary role? [{C}]"]
                 if not answer:
-                    warn(f"{name} provided no answer for {c}, defaulting to 0")
+                    warn(f"{name} provided no answer for {C}, defaulting to 0")
                     answer_num = 0
                 elif len(answer) >= 1:
                     first = answer[0]
@@ -305,8 +333,13 @@ class Input:
                 else:
                     # should not happen
                     error(f"Unexpected answer: '{answer}'")
-                courses_teach_primary[c] = answer_num
-                #courses_teach_primary[c] = int(row[f"What courses would you like to teach? [{c}]"][0])
+                courses_teach_primary[C] = answer_num
+                #courses_teach_primary[C] = int(row[f"What courses would you like to teach? [{C}]"][0])
+            for C, ed in self.courses_extra.items():
+                if name in ed["teachers"]:
+                    courses_teach_primary[C] = 2
+                else:
+                    courses_teach_primary[C] = 0
             d["courses_teach_primary"] = courses_teach_primary
             courses_teach_secondary = []
             d["courses_teach_secondary"] = [c.strip() for c in row["What courses would you like to teach in your secondary role?"].split(",") if c]
@@ -374,6 +407,26 @@ class Input:
         for k in students_data:
             self.input_data[k] = students_data[k]
 
+    def translate_course_cs_en(self, course):
+        result = None
+        if course in self.courses:
+            result = course
+        elif course == "LH 4 - techničtější":
+            result = "LH 4 - more technical"
+        elif course == "LH 4 - filozofičtější":
+            result = "LH 4 - more philosophical"
+        elif course == "Solo - improvizace":
+            result = "Solo - improvisation"
+        elif course == "Solo - choreografie":
+            result = "Solo - choreography"
+        elif course == "Autentický pohyb":
+            result = "Authentic Movement"
+        elif course == "Zumba s Tomem":
+            result = "Zumba s Tomem"
+        if not result:
+            error(f"Unknown student course {course}")
+        return result
+
     def read_students_input(self, csv_file):
         info(f"Opening students CSV: {csv_file}")
         f = open(csv_file, mode="r")
@@ -390,10 +443,11 @@ class Input:
                 for col in columns:
                     if col.startswith("Jaké kurzy si chceš zapsat?"):
                         course = col.split("[")[1].split("]")[0]
-                        if course in self.COURSES_IGNORE:
-                            warn(f"Student CSV: ignoring course {course}")
-                            continue
-                        self.check_course(course)
+                        #course = self.translate_course_cs_en(course)
+                        #if course in self.COURSES_IGNORE:
+                            #warn(f"Student CSV: ignoring course {course}")
+                            #continue
+                        #self.check_course(course)
                         # problematic: Balboa Beginners 2
                         student_courses.append(course)
                 debug(f"Student courses (C): {sorted(student_courses)}")
@@ -421,32 +475,40 @@ class Input:
             courses_attend_3 = []
             for c in student_courses:
                 #debug(f"course {c}")
-                if c == "Rhythm Pilots":
-                    pass
-                else:
-                    answer = row[f"Jaké kurzy si chceš zapsat? [{c}]"]
-                    if not answer:
-                        warn(f"Student {name} provided no answer for {c}, defaulting to 0")
-                        answer_num = 0
-                    elif len(answer) >= 1:
-                        first = answer[0]
-                        if first in ("0", "1", "2", "3"):
-                            answer_num = int(first)
-                        else:
-                            error(f"Unexpected first char in answer: '{answer}'")
+                answer = row[f"Jaké kurzy si chceš zapsat? [{c}]"]
+                if not answer:
+                    debug(f"Student {name} provided no answer for {c}, defaulting to 0")
+                    answer_num = 0
+                elif len(answer) >= 1:
+                    first = answer[0]
+                    if first in ("0", "1", "2", "3"):
+                        answer_num = int(first)
                     else:
-                        # should not happen
-                        error(f"Unexpected answer: '{answer}'")
-                    if answer_num == 3:
-                        courses_attend_3.append(c)
-                    elif answer_num == 2:
-                        courses_attend_2.append(c)
+                        error(f"Unexpected first char in answer: '{answer}'")
+                else:
+                    # should not happen
+                    error(f"Unexpected answer: '{answer}'")
+                if answer_num == 3:
+                    courses_attend_3.append(c)
+                elif answer_num == 2:
+                    courses_attend_2.append(c)
+            courses_attend = ["BAD_COURSE"]
             if len(courses_attend_3):
-                d["courses_attend"] = courses_attend_3
+                courses_attend = courses_attend_3
             elif len(courses_attend_2):
-                d["courses_attend"] = courses_attend_2
+                courses_attend = courses_attend_2
             else:
                 warn(f"No prefered courses for student {name}")
+                courses_attend = []
+            courses_attend = [self.translate_course_cs_en(Ccs) for Ccs in courses_attend]
+            d["courses_attend"] = []
+            for C in courses_attend:
+                if C in self.COURSES_IGNORE:
+                    debug(f"read_students_input: ignoring course {C}")
+                else:
+                    self.check_course(C)
+                    d["courses_attend"].append(C)
+            debug(f"read_students_input: courses_attend: {d['courses_attend']}")
             result[name] = d
 
         self.student_courses = student_courses
@@ -928,13 +990,13 @@ class Model:
 
         # SPECIFIC CONSTRAINTS
 
-        for C in I.courses_must_open:
-            model.Add(self.c_active[I.Courses[C]] == 1)
-
         # unspecified teachers teach no courses
         for T in I.teachers:
             debug(f"Teacher max: {T} {I.t_util_max.get(T,-1)}")
             model.Add(sum(self.tc[(I.Teachers[T],c)] for c in range(len(I.courses))) <= I.t_util_max.get(T, 0))
+
+        for C in I.courses_must_open:
+            model.Add(self.c_active[I.Courses[C]] == 1)
 
 #        # community teachers that must teach
 #        for T in ["Zuzka", "Vojta-N.", "Míša-L.", "Kuba-B."]:
@@ -1501,7 +1563,7 @@ class Model:
                     model.Add(sum(success_list) >= 1).OnlyEnforceIf(nobody.Not())
                     boost = 1
                     if I.input_data[T]["bestpref"] == "person":
-                        debug(f"Boosting people preferences for {T}")
+                        debug(f"teach_together: boosting people preferences for {T}")
                         boost = I.BOOSTER
                     if not I.tt_together[T]:
                         debug(f"teach_together: no preference => no penalty for {T}")
