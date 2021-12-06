@@ -47,12 +47,12 @@ class Input:
 
     courses_extra = {}
 
-    def add_extra_course(self, course, type, teachers):
-        debug(f"add_extra_course: {course} type {type} teachers {', '.join(teachers)}")
-        if type not in ("open", "solo", "regular"):
-            error(f"add_extra_course: unknown type {type}")
+    def add_extra_course(self, course, typ, teachers):
+        debug(f"add_extra_course: {course} type {typ} teachers {', '.join(teachers)}")
+        if typ not in ("open", "solo", "regular"):
+            error(f"add_extra_course: unknown type {typ}")
         self.courses_extra[course] = {}
-        self.courses_extra[course]["type"] = type
+        self.courses_extra[course]["type"] = typ
         self.courses_extra[course]["teachers"] = teachers
 
     def init_constants(self):
@@ -149,16 +149,16 @@ class Input:
         ]
         for C, d in self.courses_extra.items():
             debug(f"init_constants: extra course {C}")
-            type = d["type"]
+            typ = d["type"]
             teachers = d["teachers"]
-            if type == "open":
+            if typ == "open":
                 self.courses_open.append(C)
-            elif type == "solo":
+            elif typ == "solo":
                 self.courses_solo.append(C)
-            elif type == regular:
+            elif typ == regular:
                 self.courses_regular.append(C)
             else:
-                error(f"init_constants: unknown extra course {C} type {type}")
+                error(f"init_constants: unknown extra course {C} type {typ}")
         self.courses_open = list(set(self.courses_open)-set(self.COURSES_IGNORE))
         debug(f"init_constants: courses_open: {', '.join(self.courses_open)}")
         self.courses_solo = list(set(self.courses_solo)-set(self.COURSES_IGNORE))
@@ -1155,7 +1155,9 @@ class Model:
                     model.AddMultiplicationEquality(util_diff_abs_sq, [util_diff_abs, util_diff_abs])
                     penalties_utilization.append(util_diff_abs_sq)
                 penalties[name] = penalties_utilization
-                def analysis(src, tc):
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
                     result = []
                     for T in I.teachers:
                         if T in I.t_util_ideal:
@@ -1194,7 +1196,9 @@ class Model:
                     model.Add(days_three == sum(days_three_list))
                     penalties_teachthree.append(days_three)
                 penalties[name] = penalties_teachthree
-                def analysis(src, tc):
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
                     result = []
                     for T in I.teachers:
                         if I.input_data[T]["mindays"] != -1:
@@ -1251,7 +1255,9 @@ class Model:
                     model.AddMultiplicationEquality(days_extra_sq, [days_extra, days_extra])
                     penalties_teachdays.append(days_extra_sq)
                 penalties[name] = penalties_teachdays
-                def analysis(src, tc):
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
                     result = []
                     for T in I.teachers:
                         if I.input_data[T]["mindays"] != 1:
@@ -1294,7 +1300,9 @@ class Model:
                     model.AddMultiplicationEquality(occupied_days_extra_sq, [occupied_days_extra, occupied_days_extra])
                     penalties_occupied_days.append(occupied_days_extra_sq)
                 penalties[name] = penalties_occupied_days
-                def analysis(src, tc):
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
                     result = []
                     for P in I.people:
                         p = I.Teachers[P]
@@ -1346,7 +1354,9 @@ class Model:
                     model.Add(days_split == sum(tsplits))
                     penalties_split.append(days_split)
                 penalties[name] = penalties_split
-                def analysis(src, tc):
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
                     result = []
                     for T in I.teachers:
                         if I.input_data[T]["splitok"] != -1:
@@ -1384,7 +1394,9 @@ class Model:
                                 boost = I.BOOSTER
                             penalties_slotpref_bad.append(boost * sum(M.ts[(I.Teachers[T],s)] for s in slots_bad))
                 penalties[name] = penalties_slotpref_bad
-                def analysis(src, tc):
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
                     result = []
                     for t in range(len(I.teachers)):
                         T = I.teachers[t]
@@ -1418,7 +1430,9 @@ class Model:
                             slots_bad = [s for s in range(len(I.slots)) if prefs[s] == 2]
                             penalties_slotpref_slight.append(sum(M.ts[(I.Teachers[T],s)] for s in slots_bad))
                 penalties[name] = penalties_slotpref_slight
-                def analysis(src, tc):
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
                     result = []
                     for t in range(len(I.teachers)):
                         T = I.teachers[t]
@@ -1457,7 +1471,9 @@ class Model:
                                 boost = I.BOOSTER
                             penalties_coursepref.append(boost * sum(M.tc[(I.Teachers[T],I.Courses[C])] for C in courses_bad))
                 penalties[name] = penalties_coursepref
-                def analysis(src, tc):
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
                     result = []
                     for t in range(len(I.teachers)):
                         T = I.teachers[t]
@@ -1482,7 +1498,9 @@ class Model:
                             courses_bad = [C for C in I.courses_regular+I.courses_solo if I.tc_pref[T].get(C, -1) == 2]
                             penalties_coursepref.append(sum(M.tc[(I.Teachers[T],I.Courses[C])] for C in courses_bad))
                 penalties[name] = penalties_coursepref
-                def analysis(src, tc):
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
                     result = []
                     for t in range(len(I.teachers)):
                         T = I.teachers[t]
@@ -1502,7 +1520,9 @@ class Model:
                 for T in I.teachers:
                     penalties_everybody_teach.append(M.does_not_teach[I.Teachers[T]])
                 penalties[name] = penalties_everybody_teach
-                def analysis(src, tc):
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
                     result = []
                     for t in range(len(I.teachers)):
                         T = I.teachers[t]
@@ -1573,7 +1593,9 @@ class Model:
                     penalties_teach_together.append(boosted)
                 penalties[name] = penalties_teach_together
                 #stop()
-                def analysis(src, tc):
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
                     result = []
                     for T in I.tt_together:
                         t = I.Teachers[T]
@@ -1624,7 +1646,9 @@ class Model:
                     model.Add(n_courses_na == sum(courses_na))
                     penalties_stud_bad.append(n_courses_na)
                 penalties[name] = penalties_stud_bad
-                def analysis(src, tc):
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
                     result = []
                     total = 0
                     total_open = 0
@@ -1654,12 +1678,15 @@ class Model:
                             if sum(src[(s,r,I.Courses[CC])] for s in slots_available for r in range(len(I.rooms)) for CC in Cs) == 0:
                                 courses_na.append(C)
                                 if any([CCC in I.courses_must_open for CCC in Cs]):
+                                    # FIXME: this looks like a bad attempt to get active courses, use c_active
                                     courses_na_open.append(C)
                                     total_open += 1
                             else:
                                 courses_ok.append(C)
                                 total_ok += 1
                         if courses_na_open:
+                            debug(f"analysis stud_bad: courses_na: {who}: {', '.join(courses_na)}")
+                            debug(f"analysis stud_bad: courses_na_open: {who}: {', '.join(courses_na_open)}")
                             result.append(f"{who} [{', '.join(courses_na_open)}]")
                             total += len(courses_na)
                         if courses_ok:
@@ -1745,7 +1772,9 @@ class Model:
 #                        m += "0"
 #                debug(m)
             debug(f"Courses openness and indices")
+            R.c_active = []
             for c in range(len(I.courses)):
+                R.c_active.append(self.Value(M.c_active[c]))
                 debug(f"{I.courses[c]: <30}: {self.Value(M.c_active[c])} {self.Value(M.cs[c])}")
             R.penalties = {}
             # FIXME how to access penalties?
@@ -1805,7 +1834,7 @@ class Model:
                         if v == 0 or name not in penalties_analysis:
                             print(f"{name}: {v} * {coeff} = {v*coeff}")
                         else:
-                            print(f"{name}: {v} * {coeff} = {v*coeff} ({', '.join(penalties_analysis[name](src, tc))})")
+                            print(f"{name}: {v} * {coeff} = {v*coeff} ({', '.join(penalties_analysis[name](R))})")
                 if utilization:
                     debug("UTILIZATION:")
                     tn = {}
