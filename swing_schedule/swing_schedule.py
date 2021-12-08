@@ -90,6 +90,7 @@ class Input:
         self.courses_open = [
             "Lindy/Charleston Open Training",
             "Blues/Slow Open Training",
+            "Teachers Training /2",
             #"Rhythm Pilots /1",
             #"Rhythm Pilots /2",
             ]
@@ -98,7 +99,7 @@ class Input:
             "Solo - choreography",
             "Solo - improvisation",
             #"Authentic Movement",
-            "Teachers Training",
+            "Teachers Training /1",
             ]
         self.courses_regular = [
             "LH 1 - Beginners /1",
@@ -144,7 +145,7 @@ class Input:
 #            "Balboa Advanced",
 #            "Slow Balboa",
 #            "Blues 2",
-#            "Authentic Movement",
+            "Authentic Movement",
             "Zumba s Tomem",
         ]
         for C, d in self.courses_extra.items():
@@ -382,7 +383,6 @@ class Input:
             debug(f"Adding {name} to result")
             self.teachers.append(name)
             result[name] = d
-        self.teacher_courses = input_courses
         debug(f"Number of lines: {n}")
         debug(f"Result: {'|'.join(result)}")
         debug(f"Active teachers: {set(self.teachers)}")
@@ -492,14 +492,16 @@ class Input:
                     courses_attend_3.append(c)
                 elif answer_num == 2:
                     courses_attend_2.append(c)
-            courses_attend = ["BAD_COURSE"]
-            if len(courses_attend_3):
-                courses_attend = courses_attend_3
-            elif len(courses_attend_2):
-                courses_attend = courses_attend_2
-            else:
+#            courses_attend = ["BAD_COURSE"]
+            courses_attend = courses_attend_2 + courses_attend_3
+#            if len(courses_attend_3):
+#                courses_attend = courses_attend_3
+#            elif len(courses_attend_2):
+#                courses_attend = courses_attend_2
+#            else:
+            if not courses_attend:
                 warn(f"No prefered courses for student {name}")
-                courses_attend = []
+                #courses_attend = []
             courses_attend = [self.translate_course_cs_en(Ccs) for Ccs in courses_attend]
             d["courses_attend"] = []
             for C in courses_attend:
@@ -511,10 +513,9 @@ class Input:
             debug(f"read_students_input: courses_attend: {d['courses_attend']}")
             result[name] = d
 
-        self.student_courses = student_courses
         debug(f"Student CSV rows: {n}")
-        debug(f"Student vs. teacher courses: {set(student_courses) - set(self.teacher_courses)}")
-        debug(f"Teacher vs. student courses: {set(self.teacher_courses) - set(student_courses)}")
+        debug(f"Student courses: {', '.join(student_courses)}")
+
         return result
 
     # SPECIFIC HARD CONSTRAINTS
@@ -556,6 +557,8 @@ class Input:
         self.tc_strict = {}
         # course Cx that must open
         self.courses_must_open = []
+        # course Cx that must not open
+        self.courses_not_open = []
         # course Cx must happen on different day and at different time than Cy (and Cz)
         self.courses_different = []
         # course Cx must happen on different day than Cy (and Cz)
@@ -678,7 +681,7 @@ class Input:
             # overall schedule
             "courses_closed": 150,
             # serious penalties
-            "everybody_teach": 100000,
+            "everybody_teach": 50,
             # students
             "stud_bad": 50,
         }
@@ -998,6 +1001,9 @@ class Model:
         for C in I.courses_must_open:
             model.Add(self.c_active[I.Courses[C]] == 1)
 
+        for C in I.courses_not_open:
+            model.Add(self.c_active[I.Courses[C]] == 0)
+
 #        # community teachers that must teach
 #        for T in ["Zuzka", "Vojta-N.", "Míša-L.", "Kuba-B."]:
 #            if I.t_util_max.get(T, 0) >= 1:
@@ -1066,19 +1072,39 @@ class Model:
 
         # same courses should not happen in same days and also not in same times
         # it should probably not be a strict limitation, but it is much easier to write
+        debug(f"courses_different")
         for Cs in I.courses_different:
+            debug(f"courses_different: Cs: {Cs}")
             daylist = [] # days
             timelist = [] # times
-            assert(2 <= len(Cs) <= min(len(I.days), len(I.times)))
+            courselist = []
+            #assert(2 <= len(Cs) <= min(len(I.days), len(I.times)))
+            assert(2 <= len(Cs))
+            if len(Cs) > 3:
+                error(f"courses_different does not work for more than 3 courses, to be fixed")
             for C in Cs:
-                day = model.NewIntVar(0, len(I.days)-1, "")
-                time = model.NewIntVar(0, len(I.times)-1, "")
-                model.AddDivisionEquality(day, self.cs[I.Courses[C]], len(I.times))
-                model.AddModuloEquality(time, self.cs[I.Courses[C]], len(I.times))
+                c = I.Courses[C]
+                debug(f"courses_different: C: {C} ({c})")
+                day = model.NewIntVar(-1, len(I.days)-1, "")
+                time = model.NewIntVar(-1, len(I.times)-1, "")
+                model.AddDivisionEquality(day, self.cs[c], len(I.times))
+                model.AddModuloEquality(time, self.cs[c], len(I.times))
+                debug(f"courses_different: courselist: {courselist}")
+                for i in range(len(courselist)):
+                    co = courselist[i]
+                    debug(f"courses_different: co: {co} ({I.courses[co]})")
+                    D = daylist[i]
+                    T = timelist[i]
+                    model.Add(day != D).OnlyEnforceIf([self.c_active[c], self.c_active[co]])
+                    model.Add(time != T).OnlyEnforceIf([self.c_active[c], self.c_active[co]])
+                courselist.append(c)
                 daylist.append(day)
                 timelist.append(time)
-            model.AddAllDifferent(daylist)
-            model.AddAllDifferent(timelist)
+            debug("")
+            #old version of these constraints
+            #model.AddAllDifferent(daylist)
+            #model.AddAllDifferent(timelist)
+        #stop()
 
         # courses that should not happen in same days
         for Cs in I.courses_diffday:
@@ -1536,9 +1562,14 @@ class Model:
                 courses_attend = [I.input_data[T]["courses_attend"] for T in I.teachers]
                 courses_attend = [item for sl in courses_attend for item in sl if item != ""] # flatten sublists
                 courses_attend = set(courses_attend) # unique course names
+                # TODO do this better
                 if [C for C in courses_attend if C.startswith("LH 4")]:
                     courses_attend -= set(["LH 4"])
                     courses_attend |= set(["LH 4 - more technical", "LH 4 - more philosophical"])
+                # TODO do this better
+                if [C for C in courses_attend if C.startswith("Teachers Training")]:
+                    courses_attend -= set(["Teachers Training"])
+                    courses_attend |= set(["Teachers Training /1", "Teachers Training /2"])
                     #error(f"attend_free: courses_attend {courses_attend}")
                 debug(f"attend_free: courses_attend {courses_attend}")
                 penalties_attend_free = []
@@ -1631,41 +1662,43 @@ class Model:
                         debug(f"stud_bad: provided_id '{val['provided_id']}'")
                     else:
                         debug(f"stud_bad: no id provided")
-                    courses_na = []
+                    courses_bad = []
                     for C in val["courses_attend"]:
                         Cs = [Cspec for Cspec in I.courses if I.is_course_type(Cspec, C)]
                         if not Cs:
                             warn(f"stud_bad: no specific course found for {C}")
                             continue
                         slots_available = [s for s in range(len(I.slots)) if val["slots"][s] != 0]
-                        course_na = model.NewBoolVar("")
-                        model.Add(sum(M.src[(s,r,I.Courses[CC])] for s in slots_available for r in range(len(I.rooms)) for CC in Cs) == 0).OnlyEnforceIf(course_na)
-                        model.Add(sum(M.src[(s,r,I.Courses[CC])] for s in slots_available for r in range(len(I.rooms)) for CC in Cs) >= 1).OnlyEnforceIf(course_na.Not())
-                        courses_na.append(course_na)
-                    n_courses_na = model.NewIntVar(0, len(I.courses), "")
-                    model.Add(n_courses_na == sum(courses_na))
-                    penalties_stud_bad.append(n_courses_na)
+                        course_cannot = model.NewBoolVar("")
+                        model.Add(sum(M.src[(s,r,I.Courses[CC])] for s in slots_available for r in range(len(I.rooms)) for CC in Cs) == 0).OnlyEnforceIf(course_cannot)
+                        model.Add(sum(M.src[(s,r,I.Courses[CC])] for s in slots_available for r in range(len(I.rooms)) for CC in Cs) >= 1).OnlyEnforceIf(course_cannot.Not())
+                        courses_bad.append(course_cannot)
+                    n_courses_bad = model.NewIntVar(0, len(I.courses), "")
+                    model.Add(n_courses_bad == sum(courses_bad))
+                    penalties_stud_bad.append(n_courses_bad)
                 penalties[name] = penalties_stud_bad
                 def analysis(R):
                     src = R.src
                     tc = R.tc
                     result = []
-                    total = 0
-                    total_open = 0
+                    total_bad = 0
+#                    total_open = 0
                     total_ok = 0
+                    courses_bad_stats = {}
+                    courses_ok_stats = {}
                     for S, val in I.input_data.items():
                         if val["type"] != "student":
                             debug(f"analysis stud_bad: skipping {S}, not a student")
                             continue
-                        debug(f"stud_bad: student {S}")
+                        debug(f"analysis stud_bad: student {S}")
                         who = f"{S}"
                         if "provided_id" in val:
                             who += f"({val['provided_id']})"
                             debug(f"analysis stud_bad: provided_id '{val['provided_id']}'")
                         else:
                             debug(f"analysis stud_bad: no id provided")
-                        courses_na = []
-                        courses_na_open = []
+                        courses_bad = []
+#                        courses_na_open = []
                         courses_ok = []
                         slots_available = [s for s in range(len(I.slots)) if val["slots"][s] != 0]
                         debug(f"analysis stud_bad: slots_available: {slots_available}")
@@ -1676,23 +1709,40 @@ class Model:
                                 continue
                             debug(f"analysis stud_bad: specific courses: {', '.join(Cs)}")
                             if sum(src[(s,r,I.Courses[CC])] for s in slots_available for r in range(len(I.rooms)) for CC in Cs) == 0:
-                                courses_na.append(C)
-                                if any([CCC in I.courses_must_open for CCC in Cs]):
-                                    # FIXME: this looks like a bad attempt to get active courses, use c_active
-                                    courses_na_open.append(C)
-                                    total_open += 1
+                                courses_bad.append(C)
+                                total_bad += 1
+                                if C in courses_bad_stats:
+                                    courses_bad_stats[C] += 1
+                                else:
+                                    courses_bad_stats[C] = 1
+
+#                                if any([CCC in I.courses_must_open for CCC in Cs]):
+#                                    # FIXME: this looks like a bad attempt to get active courses, use c_active
+#                                    courses_na_open.append(C)
+#                                    total_open += 1
                             else:
                                 courses_ok.append(C)
                                 total_ok += 1
-                        if courses_na_open:
-                            debug(f"analysis stud_bad: courses_na: {who}: {', '.join(courses_na)}")
-                            debug(f"analysis stud_bad: courses_na_open: {who}: {', '.join(courses_na_open)}")
-                            result.append(f"{who} [{', '.join(courses_na_open)}]")
-                            total += len(courses_na)
+                                if C in courses_ok_stats:
+                                    courses_ok_stats[C] += 1
+                                else:
+                                    courses_ok_stats[C] = 1
+#                        if courses_na_open:
+                        if courses_bad:
+                            debug(f"analysis stud_bad: courses_bad: {who}: {', '.join(courses_bad)}")
+#                            debug(f"analysis stud_bad: courses_na_open: {who}: {', '.join(courses_na_open)}")
+#                            result.append(f"{who} [{', '.join(courses_na_open)}]")
+                            result.append(f"{who} [{', '.join(courses_bad)}]")
                         if courses_ok:
                             debug(f"analysis stud_bad: courses OK: {who}: {', '.join(courses_ok)}")
                     debug(f"Students missed:\n{pprint.pformat(result)}")
-                    info(f"analysis stud_bad: total missed: {total}, open missed: {total_open}, total OK: {total_ok}")
+                    courses_bad_stats_view = sorted( ((v,k) for k,v in courses_bad_stats.items()), reverse=True)
+                    result = [f"{k} ({v})" for v,k in courses_bad_stats_view] # FIXME
+                    info(f"Students missed statistics:\n{pprint.pformat(courses_bad_stats_view)}")
+                    courses_ok_stats_view = sorted( ((v,k) for k,v in courses_ok_stats.items()), reverse=True)
+                    info(f"Students ok statistics:\n{pprint.pformat(courses_ok_stats_view)}")
+#                    info(f"analysis stud_bad: total missed: {total_bad}, open missed: {total_open}, total OK: {total_ok}")
+                    info(f"analysis stud_bad: total missed: {total_bad}, total OK: {total_ok}")
                     return result
                 penalties_analysis[name] = analysis
 
