@@ -32,12 +32,12 @@ def stop():
     sys.exit(100)
 
 class Input:
-    def init(self, teachers_csv, students_csv=None, extra_courses=[]):
+    def init(self, teachers_csv, penalties={}, students_csv=None, extra_courses=[]):
         self.init_constants()
         self.init_form(teachers_csv, students_csv, extra_courses)
         self.init_teachers()
         self.init_rest()
-        self.init_penalties()
+        self.init_penalties(penalties)
 
     def init_form(self, teachers_csv, students_csv=None, extra_courses=[]):
         self.init_teachers_form(teachers_csv, extra_courses)
@@ -659,7 +659,7 @@ class Input:
                 debug(f"ct_possible_follow {C}: {', '.join(self.ct_possible_follow[C])}")
             # attendance done directly through input_data
 
-    def init_penalties(self):
+    def init_penalties(self, penalties):
         # "name" -> coeff
         self.PENALTIES = {
             # workload
@@ -687,6 +687,12 @@ class Input:
         }
         self.BOOSTER = 2
 
+        # user input penalties
+        for k, v in penalties.items():
+            if k not in self.PENALTIES:
+                error(f"Unknown penalty {k}")
+            else:
+                self.PENALTIES[k] = v
 
 class Result:
     pass
@@ -1562,6 +1568,7 @@ class Model:
                 courses_attend = [I.input_data[T]["courses_attend"] for T in I.teachers]
                 courses_attend = [item for sl in courses_attend for item in sl if item != ""] # flatten sublists
                 courses_attend = set(courses_attend) # unique course names
+                debug(f"attend_free: considering courses {', '.join(courses_attend)}")
                 # TODO do this better
                 if [C for C in courses_attend if C.startswith("LH 4")]:
                     courses_attend -= set(["LH 4"])
@@ -1573,7 +1580,10 @@ class Model:
                     #error(f"attend_free: courses_attend {courses_attend}")
                 debug(f"attend_free: courses_attend {courses_attend}")
                 penalties_attend_free = []
+                boost = 1
                 for C in courses_attend:
+                    if C == "Teachers Training /1":
+                        boost = I.BOOSTER
                     teachers_attend = []
                     for T in I.teachers:
                         if C in I.input_data[T]["courses_attend"]:
@@ -1585,10 +1595,91 @@ class Model:
                         model.Add(M.cs[I.Courses[C]] == s).OnlyEnforceIf(hit)
                         model.Add(M.cs[I.Courses[C]] != s).OnlyEnforceIf(hit.Not())
                         penalty_slot = model.NewIntVar(0, len(teachers_attend), "") # penalty for the slot
+                        # FIXME this does not behave as expected
                         model.Add(penalty_slot == sum(M.ps_na[(I.Teachers[T],s)] for T in teachers_attend)).OnlyEnforceIf(hit)
                         model.Add(penalty_slot == 0).OnlyEnforceIf(hit.Not())
-                        penalties_attend_free.append(penalty_slot)
+                        penalties_attend_free.append(boost * penalty_slot)
                 penalties[name] = penalties_attend_free
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
+                    cs = R.cs
+                    result = []
+                    courses_attend = [I.input_data[T]["courses_attend"] for T in I.teachers]
+                    courses_attend = [item for sl in courses_attend for item in sl if item != ""] # flatten sublists
+                    courses_attend = set(courses_attend) # unique course names
+                    debug(f"analysis attend_free: considering courses {', '.join(courses_attend)}")
+                    # TODO do this better
+                    if [C for C in courses_attend if C.startswith("LH 4")]:
+                        courses_attend -= set(["LH 4"])
+                        courses_attend |= set(["LH 4 - more technical", "LH 4 - more philosophical"])
+                    # TODO do this better
+                    if [C for C in courses_attend if C.startswith("Teachers Training")]:
+                        courses_attend -= set(["Teachers Training"])
+                        courses_attend |= set(["Teachers Training /1", "Teachers Training /2"])
+                        #error(f"attend_free: courses_attend {courses_attend}")
+                    debug(f"analysis attend_free: courses_attend {courses_attend}")
+                    for T in I.teachers:
+                        t = I.Teachers[T]
+                        wanted_input = set(I.input_data[T]["courses_attend"])
+                        if "Teachers Training" in wanted_input:
+                            wanted_input -= set(["Teachers Training"])
+                            wanted_input |= set(["Teachers Training /1", "Teachers Training /2"])
+                        if not wanted_input:
+                            debug(f"analysis attend_free: {T} did not want anything, skipping")
+                            continue
+                        possible = []
+                        not_possible = []
+                        for Cw in sorted(wanted_input):
+                            debug(f"analysis attend_free: {T} wanted course {Cw}")
+                            Cs = []
+                            for Ca in courses_attend:
+                                if I.is_course_type(Ca, Cw):
+                                    Cs.append(Ca)
+
+                            # FIXME this is not ideal
+                            if not Cs:
+                                error(f"analysis attend_free: {Cw} does not map to any specific course")
+                            else:
+                                debug(f"analysis attend_free: {Cw} maps to {Cs}")
+                            if len(Cs) != 1:
+                                warn(f"weird mapping")
+                            C = Cs[0]
+
+                            # TODO extend the logic to cover possibility of satisfying one wanted course with one of more specific courses
+                            c = I.Courses[C]
+                            if tc[(t,c)]:
+                                debug(f"analysis attend_free: {T} is actually teaching {C}")
+                                possible.append(C)
+                                continue
+                            s = cs[I.Courses[C]]
+                            if s >= 0 and I.input_data[T]["slots"][s] == 0:
+                                debug(f"analysis attend_free: time conflict {T} / {C} / {s}")
+                                not_possible.append(C)
+                                continue
+                            # teaching ocnflicts
+                            Cos = [Co for Co in set(I.courses) - set( (C,) ) if tc[(t,I.Courses[Co])] and cs[I.Courses[Co]] == s]
+                            if Cos:
+                                debug(f"analysis attend_free: teaching conflict {T} / {C} / {Cos}")
+                                not_possible.append(C)
+                                continue
+
+#                            for Co in set(I.courses) - set( (C,) ):
+#                                co = I.Courses[Co]
+#                                if tc[(t,co)] and cs[co] == s:
+#                                    debug(f"analysis attend_free: teaching conflict {T} / {C} / {Co}")
+#                                    not_possible.append(C)
+#                                    continue
+                            possible.append(C)
+                        if possible:
+                            debug(f"analysis attend_free: teacher {T} possible: {', '.join(possible)}")
+                        if not_possible:
+                            debug(f"analysis attend_free: teacher {T} not_possible: {', '.join(not_possible)}")
+                            result.append(f"{T}: {', '.join(not_possible)}")
+                        else:
+                            debug(f"analysis attend_free: {T} 100% happy")
+                    return result
+                penalties_analysis[name] = analysis
             elif name == "teach_together": # penalty if interested in teaching with Ts but teaches with noone
                 # IDEA: make this somehow counted as percent of courses taught with non-liked teachers?
                 # e.g., teaching 3 courses with liked and 2 with other would mean 40% penalty
@@ -1623,7 +1714,6 @@ class Model:
                     model.Add(boosted == boost * nobody)
                     penalties_teach_together.append(boosted)
                 penalties[name] = penalties_teach_together
-                #stop()
                 def analysis(R):
                     src = R.src
                     tc = R.tc
@@ -1823,9 +1913,11 @@ class Model:
 #                debug(m)
             debug(f"Courses openness and indices")
             R.c_active = []
+            R.cs = []
             for c in range(len(I.courses)):
                 R.c_active.append(self.Value(M.c_active[c]))
                 debug(f"{I.courses[c]: <30}: {self.Value(M.c_active[c])} {self.Value(M.cs[c])}")
+                R.cs.append(self.Value(M.cs[c]))
             R.penalties = {}
             # FIXME how to access penalties?
             for (name, l) in M.penalties.items():
@@ -1929,19 +2021,26 @@ def parse(argv=None):
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose", help="Debug output")
     parser.add_argument("-s", "--students", action="store", dest="students", help="Students' preferences CSV")
     parser.add_argument("-t", "--teachers", action="store", dest="teachers", help="Teachers' preferences CSV")
+    parser.add_argument("-p", "--penalty", action="append", dest="penalties", help="Penalty value 'name:X'")
     args = parser.parse_args()
 
     if args.verbose:
         set_verbose()
 
-    return (args.teachers, args.students)
+    penalties = {}
+    if args.penalties:
+        for x in args.penalties:
+            name, value = x.split(":")
+            penalties[name] = int(value)
+
+    return (args.teachers, args.students, penalties)
 
 def main():
-    teach_csv, stud_csv = parse()
+    teach_csv, stud_csv, penalties = parse()
 
     # all input information
     input = Input()
-    input.init(teach_csv)
+    input.init(teach_csv, students_csv=stud_csv, penalties=penalties)
 
     # model construction
     model = Model()
