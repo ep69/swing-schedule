@@ -570,6 +570,8 @@ class Input:
         #  * in the same venue
         self.courses_same = []
 
+        self.custom_penalties = []
+
         # translate input data to variables understood by the rest of the script
         for T in set(self.teachers):
             debug(f"Person {T}")
@@ -684,6 +686,7 @@ class Input:
             "everybody_teach": 50,
             # students
             "stud_bad": 50,
+            "custom": 200,
         }
         self.BOOSTER = 2
 
@@ -1160,6 +1163,13 @@ class Model:
             model.Add(sum(self.src[(s,I.Rooms[R],c)] for s in range(len(I.slots))) == 1).OnlyEnforceIf(self.c_active[c])
             model.Add(sum(self.src[(s,I.Rooms[R],c)] for s in range(len(I.slots))) == 0).OnlyEnforceIf(self.c_active[c].Not())
 
+        self.custom_penalties = {}
+
+
+    def init_penalties(self):
+        I = self.I
+        M = self
+        model = self.model
 
         # OPTIMIZATION
 
@@ -1835,6 +1845,19 @@ class Model:
                     info(f"analysis stud_bad: total missed: {total_bad}, total OK: {total_ok}")
                     return result
                 penalties_analysis[name] = analysis
+            elif name == "custom":
+                penalties_custom = self.custom_penalties.values()
+                penalties[name] = penalties_custom
+                def analysis(R):
+                    src = R.src
+                    tc = R.tc
+                    cp = R.custom_penalties
+                    result = []
+                    for name, v in cp.items():
+                        if v:
+                            result.append(name)
+                    return result
+                penalties_analysis[name] = analysis
 
         self.penalties = penalties
         self.penalties_analysis = penalties_analysis
@@ -1924,6 +1947,9 @@ class Model:
                 v = sum([self.Value(p) for p in l])
                 coeff = I.PENALTIES[name]
                 R.penalties[name] = (coeff, v)
+            R.custom_penalties = {}
+            for name, v in M.custom_penalties.items():
+                R.custom_penalties[name] = self.Value(v)
             print(f"No: {self.count}")
             print(f"Wall time: {self.WallTime()}")
             #print(f"Branches: {self.NumBranches()}")
