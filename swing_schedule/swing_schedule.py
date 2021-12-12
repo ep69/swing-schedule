@@ -1970,9 +1970,12 @@ class Model:
                 if penalties:
                     print("Penalties:")
                     total = 0
+                    total_teachers = 0
                     for (name, t) in penalties.items():
                         coeff, v = t
                         total += coeff * v
+                        if name not in ("stud_bad",):
+                            total_teachers += coeff * v
                         if v == 0 or name not in penalties_analysis:
                             print(f"{name}: {v} * {coeff} = {v*coeff}")
                         else:
@@ -1987,6 +1990,7 @@ class Model:
                     for v in sorted(set(tn.values())):
                         print(f"{v}: {', '.join(t for t in tn if tn[t] == v)}")
                 print(f"TOTAL: {total}")
+                print(f"TEACHERS: {total_teachers}")
 
             debug(pprint.pformat(R))
             print_solution(R, M.penalties_analysis, self.ObjectiveValue())
