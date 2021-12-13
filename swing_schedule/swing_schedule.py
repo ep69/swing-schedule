@@ -222,7 +222,7 @@ class Input:
 
     def read_teachers_input(self, infile=None, extra_courses=[]):
         if infile:
-            info(f"Opening {infile}")
+            debug(f"Opening {infile}")
             f = open(infile, mode="r")
         else: # use stdin
             f = sys.stdin
@@ -250,10 +250,10 @@ class Input:
                 for C in extra_courses:
                     if C not in input_courses:
                         input_courses.append(C)
-                info(f"Input courses (F): {sorted(input_courses)}")
-                info(f"Input courses (C): {sorted(self.courses)}")
+                debug(f"Input courses (F): {sorted(input_courses)}")
+                debug(f"Input courses (C): {sorted(self.courses)}")
                 # does not make sense (general vs. specific course names)
-                #info(f"Input courses (diff): {set(self.courses)-set(input_courses)-set(self.COURSES_IGNORE)}")
+                #debug(f"Input courses (diff): {set(self.courses)-set(input_courses)-set(self.COURSES_IGNORE)}")
             # handle the input data
             debug("")
             who = row["Who are you?"]
@@ -262,6 +262,9 @@ class Input:
                 continue
             name = self.translate_teacher_name(who)
             debug(f"Reading: name {name}")
+            if name in result:
+                warn(f"Re-reading answers for {name}")
+                del(result[name])
 #            # check that we know the teacher
 #            found = False
 #            for T,_ in self.TEACHERS:
@@ -380,12 +383,18 @@ class Input:
             d["teach_not_together"] = [self.translate_teacher_name(name) for name in row["Are there any people you cannot teach with?"].split(",") if name]
             if name in d["teach_not_together"]:
                 d["teach_not_together"].remove(name)
-            debug(f"Adding {name} to result")
-            self.teachers.append(name)
+            if name not in self.teachers:
+                debug(f"Adding {name} to result")
+                self.teachers.append(name)
+            else:
+                warn(f"Teacher {name} already known, probably re-reading")
             result[name] = d
         debug(f"Number of lines: {n}")
         debug(f"Result: {'|'.join(result)}")
-        debug(f"Active teachers: {set(self.teachers)}")
+        if len(self.teachers) != len(set(self.teachers)):
+            error(f"Unexpected teachers, probably duplicates in {', '.join(sorted(self.teachers))}")
+        #self.teachers = list(set(self.teachers))
+        debug(f"Active teachers: {self.teachers}")
 
         if f is not sys.stdin:
             f.close()
@@ -428,7 +437,7 @@ class Input:
         return result
 
     def read_students_input(self, csv_file):
-        info(f"Opening students CSV: {csv_file}")
+        debug(f"Opening students CSV: {csv_file}")
         f = open(csv_file, mode="r")
         reader = csv.DictReader(f)
 
@@ -685,8 +694,8 @@ class Input:
             # serious penalties
             "everybody_teach": 50,
             # students
-            "stud_bad": 50,
-            "custom": 200,
+            "stud_bad": 20,
+            "custom": 300,
         }
         self.BOOSTER = 2
 
@@ -1178,7 +1187,7 @@ class Model:
 
         for (name, coeff) in I.PENALTIES.items():
             if coeff == 0:
-                info(f"Penalties: skipping '{name}'")
+                warn(f"Penalties: skipping '{name}'")
                 continue
             if name == "utilization":
                 # teaching should be as close to preferences as possible
@@ -1373,7 +1382,7 @@ class Model:
                         warn(f"Teacher {T} wants split, not implemented yet")
                         # TODO
                     elif splitok == 0:
-                        info(f"Teacher {T} indifferent to split")
+                        debug(f"Teacher {T} indifferent to split")
                         continue
                     elif splitok == -1:
                         debug(f"Teacher {T} does not like split")
@@ -1586,7 +1595,8 @@ class Model:
                 # TODO do this better
                 if [C for C in courses_attend if C.startswith("Teachers Training")]:
                     courses_attend -= set(["Teachers Training"])
-                    courses_attend |= set(["Teachers Training /1", "Teachers Training /2"])
+                    #courses_attend |= set(["Teachers Training /1", "Teachers Training /2"])
+                    courses_attend |= set(["Teachers Training /1"])
                     #error(f"attend_free: courses_attend {courses_attend}")
                 debug(f"attend_free: courses_attend {courses_attend}")
                 penalties_attend_free = []
@@ -1626,7 +1636,8 @@ class Model:
                     # TODO do this better
                     if [C for C in courses_attend if C.startswith("Teachers Training")]:
                         courses_attend -= set(["Teachers Training"])
-                        courses_attend |= set(["Teachers Training /1", "Teachers Training /2"])
+                        #courses_attend |= set(["Teachers Training /1", "Teachers Training /2"])
+                        courses_attend |= set(["Teachers Training /1"])
                         #error(f"attend_free: courses_attend {courses_attend}")
                     debug(f"analysis attend_free: courses_attend {courses_attend}")
                     for T in I.teachers:
@@ -1634,7 +1645,8 @@ class Model:
                         wanted_input = set(I.input_data[T]["courses_attend"])
                         if "Teachers Training" in wanted_input:
                             wanted_input -= set(["Teachers Training"])
-                            wanted_input |= set(["Teachers Training /1", "Teachers Training /2"])
+                            #wanted_input |= set(["Teachers Training /1", "Teachers Training /2"])
+                            wanted_input |= set(["Teachers Training /1"])
                         if not wanted_input:
                             debug(f"analysis attend_free: {T} did not want anything, skipping")
                             continue
@@ -1838,11 +1850,11 @@ class Model:
                     debug(f"Students missed:\n{pprint.pformat(result)}")
                     courses_bad_stats_view = sorted( ((v,k) for k,v in courses_bad_stats.items()), reverse=True)
                     result = [f"{k} ({v})" for v,k in courses_bad_stats_view] # FIXME
-                    info(f"Students missed statistics:\n{pprint.pformat(courses_bad_stats_view)}")
+                    debug(f"Students missed statistics:\n{pprint.pformat(courses_bad_stats_view)}")
                     courses_ok_stats_view = sorted( ((v,k) for k,v in courses_ok_stats.items()), reverse=True)
                     info(f"Students ok statistics:\n{pprint.pformat(courses_ok_stats_view)}")
-#                    info(f"analysis stud_bad: total missed: {total_bad}, open missed: {total_open}, total OK: {total_ok}")
-                    info(f"analysis stud_bad: total missed: {total_bad}, total OK: {total_ok}")
+#                    debug(f"analysis stud_bad: total missed: {total_bad}, open missed: {total_open}, total OK: {total_ok}")
+                    debug(f"analysis stud_bad: total missed: {total_bad}, total OK: {total_ok}")
                     return result
                 penalties_analysis[name] = analysis
             elif name == "custom":
