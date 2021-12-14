@@ -1176,6 +1176,7 @@ class Model:
 
 
     def init_penalties(self):
+        debug(f"Model: init_penalties")
         I = self.I
         M = self
         model = self.model
@@ -1879,6 +1880,8 @@ class Model:
 
         model.Minimize(sum(penalties_values))
 
+        debug(f"Model: penalties initialized")
+
     def print_stats(self):
         print(self.model.ModelStats())
 
@@ -2019,7 +2022,7 @@ class Model:
                         else:
                             print(f"{name}: {v} * {coeff} = {v*coeff} ({', '.join(penalties_analysis[name](R))})")
                 if utilization:
-                    debug("UTILIZATION:")
+                    print("UTILIZATION:")
                     tn = {}
                     #for t in range(len(I.teachers)):
                         #tn[I.teachers[t]] = sum(tc[t,c] for c in range(len(I.courses)))
@@ -2087,6 +2090,7 @@ def main():
     # model construction
     model = Model()
     model.init(input)
+    model.init_penalties()
 
     # run the solver
     model.solve()
