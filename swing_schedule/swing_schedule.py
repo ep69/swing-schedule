@@ -62,8 +62,8 @@ class Input:
         for i, D in enumerate(self.days):
             self.Days[D] = i
 
-        #self.times = ["17:30-18:40", "18:45-19:55", "20:00-21:10"]
-        self.times = ["17:30", "18:45", "20:00"]
+        #self.times = ["17:30-18:40", "18:50-20:00", "20:10-21:20"]
+        self.times = ["17:30", "18:50", "20:10"]
 
         self.slots = [ d + " " + t for d in self.days for t in self.times ]
 
@@ -280,7 +280,7 @@ class Input:
             d["ncourses_max"] = int(row["How many courses are you able to teach at most?"])
             slots = []
             for day in ["Mon", "Tue", "Wed", "Thu"]:
-                for time in ["17:30", "18:45", "20:00"]:
+                for time in ["17:30", "18:50", "20:10"]:
                     slots.append(int(row[f"What days and times are convenient for you? [{day} {time}]"][0]))
             d["slots"] = slots
             mindays = row["Do you prefer to spend as few days as possible with teaching or not having many courses in one day?"]
@@ -354,6 +354,8 @@ class Input:
                 d["bestpref"] = "course"
             elif bestpref.startswith("People"):
                 d["bestpref"] = "person"
+            elif bestpref.startswith("None"):
+                d["bestpref"] = "none"
             else:
                 error(f"Unknow best pref: {bestpref}")
             d["courses_attend"] = [a.strip() for a in row["What courses and trainings would you like to attend?"].split(",") if a]
@@ -473,7 +475,7 @@ class Input:
             slots = []
             for day in ("Pondělí", "Úterý", "Středa", "Čtvrtek"):
                 daycell = row[f"Jaké dny a časy ti absolutně NEvyhovují? [{day}]"]
-                for time in ("17:30 - 18:40", "18:45 - 19:55", "20:00 - 21:10"):
+                for time in ("17:30 - 18:40", "18:50 - 20:00", "20:10 - 21:20"):
                     if time in daycell:
                         slots.append(0)
                     else:
