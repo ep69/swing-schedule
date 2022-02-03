@@ -88,18 +88,18 @@ class Input:
             }
 
         self.courses_open = [
+            "Shag/Balboa Open Training",
             "Lindy/Charleston Open Training",
-            "Blues/Slow Open Training",
             "Teachers Training /2",
             #"Rhythm Pilots /1",
             #"Rhythm Pilots /2",
             ]
         self.courses_solo = [
-            "Shag/Balboa Open Training",
             "Solo - choreography",
             "Solo - improvisation",
             #"Authentic Movement",
             "Teachers Training /1",
+            "Blues/Slow Open Training",
             ]
         self.courses_regular = [
             "LH 1 - Beginners /1",
@@ -124,7 +124,8 @@ class Input:
             "Balboa Beginners",
             "Balboa Intermediate",
             "Balboa Advanced",
-            "Slow Balboa",
+            "Slow Balboa 1",
+            "Slow Balboa 2",
             "Airsteps 1",
             "Airsteps 2",
             "Saint Louis Shag 1",
@@ -138,12 +139,11 @@ class Input:
 #            #"LH 2.5 - Swingout /2", #
 #            #"LH 3 - Musicality",
 #            "LH 5",
-#            "Airsteps 1", # FIXME
-#            "Airsteps 2", # FIXME
+#            "Airsteps 1",
+#            "Airsteps 2",
 #            "Saint Louis Shag 1",
 #            "Saint Louis Shag 2",
 #            "Balboa Advanced",
-#            "Slow Balboa",
 #            "Blues 2",
             "Authentic Movement",
             "Zumba s Tomem",
@@ -411,7 +411,7 @@ class Input:
         self.input_data = teachers_data
 
     def init_students_form(self, infile):
-        warn(f"Not finished: reading students' preferences")
+        debug(f"Reading students' preferences")
         students_data = self.read_students_input(infile)
         debug("STUDENTS' ANSWERS:")
         debug(pprint.pformat(students_data))
@@ -450,18 +450,7 @@ class Input:
             n += 1
             if n == 1:
                 # check courses when handling the first row
-                columns = list(row.keys())
-                for col in columns:
-                    if col.startswith("Jaké kurzy si chceš zapsat?"):
-                        course = col.split("[")[1].split("]")[0]
-                        #course = self.translate_course_cs_en(course)
-                        #if course in self.COURSES_IGNORE:
-                            #warn(f"Student CSV: ignoring course {course}")
-                            #continue
-                        #self.check_course(course)
-                        # problematic: Balboa Beginners 2
-                        student_courses.append(course)
-                debug(f"Student courses (C): {sorted(student_courses)}")
+                debug("First row")
             # handle the input data
             name = f"stud{n}"
             debug(f"Reading student: {name}")
@@ -482,36 +471,20 @@ class Input:
                         slots.append(2)
             debug(f"Slots: {''.join(str(s) for s in slots)}")
             d["slots"] = slots
-            courses_attend_2 = []
-            courses_attend_3 = []
-            for c in student_courses:
-                #debug(f"course {c}")
-                answer = row[f"Jaké kurzy si chceš zapsat? [{c}]"]
-                if not answer:
-                    debug(f"Student {name} provided no answer for {c}, defaulting to 0")
-                    answer_num = 0
-                elif len(answer) >= 1:
-                    first = answer[0]
-                    if first in ("0", "1", "2", "3"):
-                        answer_num = int(first)
-                    else:
-                        error(f"Unexpected first char in answer: '{answer}'")
-                else:
-                    # should not happen
-                    error(f"Unexpected answer: '{answer}'")
-                if answer_num == 3:
-                    courses_attend_3.append(c)
-                elif answer_num == 2:
-                    courses_attend_2.append(c)
-#            courses_attend = ["BAD_COURSE"]
-            courses_attend = courses_attend_2 + courses_attend_3
-#            if len(courses_attend_3):
-#                courses_attend = courses_attend_3
-#            elif len(courses_attend_2):
-#                courses_attend = courses_attend_2
-#            else:
+
+            answer = row[f"V jaké roli si zapisuješ kurzy?"]
+            if answer in ("Lead", "Follow"):
+                d["role"] = answer.lower()
+            else:
+                warn(f"Ignoring non-standard role '{answer}'")
+                continue
+
+            answer = row[f"Jaké kurzy si chceš zapsat?"]
+            courses_attend = [c.strip() for c in answer.split(",") if c]
+            debug(f"Chosen courses: '{','.join(courses_attend)}'")
             if not courses_attend:
-                warn(f"No prefered courses for student {name}")
+                warn(f"No prefered courses for student {name}, ignoring the student")
+                continue
                 #courses_attend = []
             courses_attend = [self.translate_course_cs_en(Ccs) for Ccs in courses_attend]
             d["courses_attend"] = []
@@ -692,12 +665,12 @@ class Input:
             # person-related
             "teach_together": 25,
             # overall schedule
-            "courses_closed": 150,
+            "courses_closed": 1, #150,
             # serious penalties
             "everybody_teach": 50,
             # students
             "stud_bad": 20,
-            "custom": 300,
+            "custom": 150,
         }
         self.BOOSTER = 2
 
@@ -1591,11 +1564,7 @@ class Model:
                 courses_attend = [item for sl in courses_attend for item in sl if item != ""] # flatten sublists
                 courses_attend = set(courses_attend) # unique course names
                 debug(f"attend_free: considering courses {', '.join(courses_attend)}")
-                # TODO do this better
-                if [C for C in courses_attend if C.startswith("LH 4")]:
-                    courses_attend -= set(["LH 4"])
-                    courses_attend |= set(["LH 4 - more technical", "LH 4 - more philosophical"])
-                # TODO do this better
+                # TODO do this in more generic way; complication: any course could satisfy the person, not all
                 if [C for C in courses_attend if C.startswith("Teachers Training")]:
                     courses_attend -= set(["Teachers Training"])
                     #courses_attend |= set(["Teachers Training /1", "Teachers Training /2"])
@@ -1632,10 +1601,6 @@ class Model:
                     courses_attend = [item for sl in courses_attend for item in sl if item != ""] # flatten sublists
                     courses_attend = set(courses_attend) # unique course names
                     debug(f"analysis attend_free: considering courses {', '.join(courses_attend)}")
-                    # TODO do this better
-                    if [C for C in courses_attend if C.startswith("LH 4")]:
-                        courses_attend -= set(["LH 4"])
-                        courses_attend |= set(["LH 4 - more technical", "LH 4 - more philosophical"])
                     # TODO do this better
                     if [C for C in courses_attend if C.startswith("Teachers Training")]:
                         courses_attend -= set(["Teachers Training"])
@@ -1855,7 +1820,7 @@ class Model:
                     result = [f"{k} ({v})" for v,k in courses_bad_stats_view] # FIXME
                     debug(f"Students missed statistics:\n{pprint.pformat(courses_bad_stats_view)}")
                     courses_ok_stats_view = sorted( ((v,k) for k,v in courses_ok_stats.items()), reverse=True)
-                    info(f"Students ok statistics:\n{pprint.pformat(courses_ok_stats_view)}")
+                    debug(f"Students ok statistics:\n{pprint.pformat(courses_ok_stats_view)}")
 #                    debug(f"analysis stud_bad: total missed: {total_bad}, open missed: {total_open}, total OK: {total_ok}")
                     debug(f"analysis stud_bad: total missed: {total_bad}, total OK: {total_ok}")
                     return result
@@ -2005,11 +1970,11 @@ class Model:
                                 #if len(Ts) == 2 and (Ts[0] in I.teachers_follow or Ts[1] in I.teachers_lead):
                                     #Ts[0], Ts[1] = Ts[1], Ts[0]
                                 if len(Ts) == 2:
-                                    Ts_print = f"{Ts[0] :<9}+ {Ts[1]}"
+                                    Ts_print = f"{Ts[0] :<10}+ {Ts[1]}"
                                 else:
                                     Ts_print = f"{Ts[0]}"
                                 #print(f"{I.slots[s]: <11}{I.rooms[r]: <5}{'+'.join(Ts): <19}{I.courses[c]}")
-                                print(f"{I.slots[s]: <11}{I.rooms[r]: <5}{Ts_print: <21}{I.courses[c]}")
+                                print(f"{I.slots[s]: <11}{I.rooms[r]: <5}{Ts_print: <22}{I.courses[c]}")
                 if penalties:
                     print("Penalties:")
                     total = 0
