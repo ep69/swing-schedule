@@ -303,7 +303,7 @@ class Input:
                 "Teaching 1 more course than desired": "1more",
                 "Teaching 2 more courses than desired": "2more",
                 "Teaching 1 less course than desired": "1less",
-                "Not teaching at all": "zero",
+                "Not teaching at all": "not_teaching",
                 "Teaching during Teachers' Training": "tt",
                 "Not respecting an explicit wish from the last question": "special",
             }
@@ -1197,7 +1197,13 @@ class Model:
 
         self.penalties = {} # penalties data (model variables)
         self.penalties["heavy"] = {}
-        penalties_analysis = {} # deeper analysis functions for penalties
+        self.penalties["custom"] = {}
+
+        self.wish = {}
+        for T in I.Teachers:
+            self.wish[T] = model.NewBoolVar("")
+
+        penalties_analysis = {} # deeper analysis functions for penalties # TODO remove
 
         for (name, coeff) in I.PENALTIES.items():
             if coeff == 0:
@@ -1233,7 +1239,6 @@ class Model:
                     util_diff_pos = model.NewIntVar(0, MAX_DIFF, "")
                     model.AddMaxEquality(util_diff_pos, [0, util_diff])
                     more1_max = icw["1more"]
-                    warn(f"more1_max: {more1_max}")
                     more1 = model.NewIntVar(0, more1_max, "")
                     zero1 = model.NewBoolVar("")
                     model.Add(util_diff_pos <= 0).OnlyEnforceIf(zero1)
@@ -1243,7 +1248,6 @@ class Model:
                     self.penalties["teacher"][T]["1more"] = more1
                     # utilization - 2more
                     more2_max = icw["2more"] * MAX_DIFF
-                    warn(f"more2_max: {more2_max}")
                     more2 = model.NewIntVar(0, more2_max, "")
                     zero2 = model.NewBoolVar("")
                     model.Add(util_diff_pos <= 1).OnlyEnforceIf(zero2)
@@ -1297,6 +1301,11 @@ class Model:
                     model.Add(p22 == icw["2c2d"] * days_extra)
                     self.penalties["teacher"][T]["2c2d"] = p22
 
+                    # not_teaching
+                    p_not_teaching = model.NewIntVar(0, icw["not_teaching"], "")
+                    model.Add(p_not_teaching == teaches_some.Not() * icw["not_teaching"])
+                    self.penalties["teacher"][T]["not_teaching"] = p_not_teaching
+
                     # split
                     days_split = model.NewIntVar(0, len(I.days), "TDsplit:%i" % t)
                     tsplits = []
@@ -1323,6 +1332,57 @@ class Model:
                     p_slot_bad = model.NewIntVar(0, icw["bad_time"] * 10, "")
                     model.Add(p_slot_bad == icw["bad_time"] * sum(M.ts[(t,s)] for s in slots_bad))
                     self.penalties["teacher"][T]["bad_time"] = p_slot_bad
+
+                    # bad_course
+                    # teacher T strongly prefers some courses over others
+                    courses_bad = [C for C in I.courses_regular+I.courses_solo if I.tc_pref[T].get(C, -1) == 1]
+                    p_course_bad = model.NewIntVar(0, icw["bad_course"] * 10, "")
+                    debug(f"courses_bad {T}: {courses_bad}")
+                    model.Add(p_course_bad == icw["bad_course"] * sum(M.tc[(I.Teachers[T],I.Courses[C])] for C in courses_bad))
+                    self.penalties["teacher"][T]["bad_course"] = p_course_bad
+
+                    # no_perfect
+                    courses_perfect = [C for C in I.courses_regular+I.courses_solo if I.tc_pref[T].get(C, -1) == 3]
+                    p_no_perfect = model.NewIntVar(0, icw["no_perfect"], "")
+                    debug(f"courses_perfect {T}: {courses_perfect}")
+                    teaches_perfect = model.NewIntVar(0, 10, "")
+                    model.Add(teaches_perfect == sum(M.tc[(I.Teachers[T],I.Courses[C])] for C in courses_perfect))
+                    zero = model.NewBoolVar("")
+                    model.Add(teaches_perfect == 0).OnlyEnforceIf(zero)
+                    model.Add(teaches_perfect >= 1).OnlyEnforceIf(zero.Not())
+                    model.Add(p_no_perfect == icw["no_perfect"] * zero)
+                    self.penalties["teacher"][T]["no_perfect"] = p_no_perfect
+
+                    # no_person
+                    debug(f"teach_together: {T} + {I.tt_together[T]}")
+                    success_list = []
+                    for c in range(len(I.courses)):
+                        hit_self = model.NewBoolVar("")
+                        hit_other = model.NewBoolVar("")
+                        success = model.NewBoolVar("")
+                        model.Add(M.tc[(t,c)] == 1).OnlyEnforceIf(hit_self)
+                        model.Add(M.tc[(t,c)] == 0).OnlyEnforceIf(hit_self.Not())
+                        model.Add(sum(M.tc[(I.Teachers[To],c)] for To in I.tt_together[T]) >= 1).OnlyEnforceIf(hit_other)
+                        model.Add(sum(M.tc[(I.Teachers[To],c)] for To in I.tt_together[T]) == 0).OnlyEnforceIf(hit_other.Not())
+                        model.AddBoolAnd([hit_self, hit_other]).OnlyEnforceIf(success)
+                        model.AddBoolOr([hit_self.Not(), hit_other.Not()]).OnlyEnforceIf(success.Not())
+                        success_list.append(success)
+                    nobody = model.NewBoolVar("")
+                    model.Add(sum(success_list) == 0).OnlyEnforceIf(nobody)
+                    model.Add(sum(success_list) >= 1).OnlyEnforceIf(nobody.Not())
+                    if not I.tt_together[T]:
+                        warn(f"teach_together: no preference => no penalty for {T}") # TODO
+                    p_no_person = model.NewIntVar(0, icw["no_person"], "")
+                    model.Add(p_no_person == icw["no_person"] * nobody)
+                    self.penalties["teacher"][T]["no_person"] = p_no_person
+
+                    # special
+                    if icw["special"]:
+                        warn(f"Special wish for {T}")
+                        p_special = model.NewIntVar(0, icw["special"], "")
+                        model.Add(p_special == icw["special"] * self.wish[T])
+                        self.penalties["teacher"][T]["special"] = p_special
+
 
             elif name == "utilization":
                 # teaching should be as close to preferences as possible
@@ -2040,19 +2100,34 @@ class Model:
         print(self.model.ModelStats())
 
     def add_heavy(self, name, *args):
+        self.add_rule("heavy", name, *args)
+
+    def add_custom(self, name, *args):
+        self.add_rule("custom", name, *args)
+
+    def add_rule(self, typ, name, *args):
         model = self.model
 
         if not name:
-            name = f"heavy-{len(self.penalties.heavy)}"
-        if name in self.penalties["heavy"]:
-            warn(f"Heavy penalty {name} already exists")
-            p = self.penalties["heavy"][name]
+            # TODO probably not possible..
+            name = f"{typ}-{len(self.penalties[typ])}"
+        if name in self.penalties[typ]:
+            warn(f"Type {typ} penalty {name} already exists")
+            p = self.penalties[typ][name]
         else:
-            warn(f"Heavy penalty {name} does not exist yet")
+            debug(f"Type {typ} penalty {name} does not exist yet")
             p = model.NewBoolVar("")
-            self.penalties["heavy"][name] = p
+            self.penalties[typ][name] = p
 
         model.Add(*args).OnlyEnforceIf(p.Not())
+
+    def add_wish(self, teacher, *args):
+        model = self.model
+
+        p = self.wish[teacher]
+
+        model.Add(*args).OnlyEnforceIf(p.Not())
+
 
     # INNER CLASS
     class ContinuousSolutionPrinter(cp_model.CpSolverSolutionCallback):
@@ -2201,14 +2276,23 @@ class Model:
                         else:
                             debug(f" * {T} is happy")
                     l = []
+                    w = I.PENALTIES["heavy"]
                     for (name, v) in penalties["heavy"].items():
-                        w = I.PENALTIES["heavy"]
                         y = self.Value(v) # TODO
                         if y != 0:
                             l.append(name)
                     if not l:
                         l.append("none")
-                    print(f"Heavy: {', '.join(l)}")
+                    print(f"Heavy ({w}): {', '.join(l)}")
+                    l = []
+                    w = I.PENALTIES["custom"]
+                    for (name, v) in penalties["custom"].items():
+                        y = self.Value(v) # TODO
+                        if y != 0:
+                            l.append(name)
+                    if not l:
+                        l.append("none")
+                    print(f"Custom ({w}): {', '.join(l)}")
 #                    for (name, t) in penalties.items():
 #                        coeff, v = t
 #                        total += coeff * v
