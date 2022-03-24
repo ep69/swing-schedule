@@ -699,7 +699,7 @@ class Input:
 #            # person-related
 #            "teach_together": 25,
 #            # overall schedule
-#            "courses_closed": 1, #150,
+            "courses_closed": 150,
 #            # serious penalties
 #            "everybody_teach": 50,
             # students
@@ -1212,6 +1212,15 @@ class Model:
             if name == "teacher":
                 self.penalties["teacher"] = {}
                 total_teacher = coeff
+
+                tt_map = []
+                c = I.Courses["Teachers Training /1"]
+                for s in range(len(I.slots)):
+                    hit = model.NewBoolVar("")
+                    model.Add(M.cs[c] == s).OnlyEnforceIf(hit)
+                    model.Add(M.cs[c] != s).OnlyEnforceIf(hit.Not())
+                    tt_map.append(hit)
+
                 for T in I.Teachers:
                     t = I.Teachers[T]
                     self.penalties["teacher"][T] = {}
@@ -1306,6 +1315,26 @@ class Model:
                     model.Add(p_not_teaching == teaches_some.Not() * icw["not_teaching"])
                     self.penalties["teacher"][T]["not_teaching"] = p_not_teaching
 
+                    # teaching during Teachers Training
+                    w = icw["tt"]
+                    l = []
+                    for s in range(len(I.slots)):
+                        hit = model.NewBoolVar("")
+                        model.AddBoolAnd([tt_map[s], M.ts[(t,s)]]).OnlyEnforceIf(hit)
+                        model.AddBoolOr([tt_map[s].Not(), M.ts[(t,s)].Not()]).OnlyEnforceIf(hit.Not())
+                        l.append(hit)
+                    teaches_tt = model.NewBoolVar("")
+                    c = I.Courses["Teachers Training /1"]
+                    model.Add(M.tc[(t,c)] == 1).OnlyEnforceIf(teaches_tt)
+                    model.Add(M.tc[(t,c)] == 0).OnlyEnforceIf(teaches_tt.Not())
+                    teaches_tt_time = model.NewBoolVar("")
+                    model.Add(teaches_tt_time == sum(l)).OnlyEnforceIf(teaches_tt.Not())
+                    model.Add(teaches_tt_time == 0).OnlyEnforceIf(teaches_tt)
+                    p_tt = model.NewIntVar(0, w, "")
+                    model.Add(p_tt == teaches_tt_time * w)
+                    self.penalties["teacher"][T]["tt"] = p_tt
+
+
                     # split
                     days_split = model.NewIntVar(0, len(I.days), "TDsplit:%i" % t)
                     tsplits = []
@@ -1383,6 +1412,15 @@ class Model:
                         model.Add(p_special == icw["special"] * self.wish[T])
                         self.penalties["teacher"][T]["special"] = p_special
 
+            elif name == "courses_closed": # penalty if too little courses are opened
+                penalties_courses_closed = []
+                total_courseslots = 4 * 3 * 2 # days, times, rooms
+                n_active = model.NewIntVar(0, total_courseslots, "")
+                n_closed = model.NewIntVar(0, total_courseslots, "")
+                model.Add(n_closed == total_courseslots - sum(M.c_active))
+                #w = I.PENALTIES["courses_closed"]
+                #p_closed = model.NewIntVar(0, total_courseslots * w, "")
+                self.penalties["closed"] = n_closed
 
             elif name == "utilization":
                 # teaching should be as close to preferences as possible
@@ -1952,13 +1990,13 @@ class Model:
                             result.append(f"{T}")
                     return result
                 penalties_analysis[name] = analysis
-            elif name == "courses_closed": # penalty if too little courses are opened
-                penalties_courses_closed = []
-                total_courseslots = 4 * 3 * 2 # days, times, rooms
-                n_active = model.NewIntVar(0, total_courseslots, "")
-                n_closed = model.NewIntVar(0, total_courseslots, "")
-                model.Add(n_closed == total_courseslots - sum(M.c_active))
-                penalties_courses_closed = [n_closed]
+#            elif name == "courses_closed": # penalty if too little courses are opened
+#                penalties_courses_closed = []
+#                total_courseslots = 4 * 3 * 2 # days, times, rooms
+#                n_active = model.NewIntVar(0, total_courseslots, "")
+#                n_closed = model.NewIntVar(0, total_courseslots, "")
+#                model.Add(n_closed == total_courseslots - sum(M.c_active))
+#                penalties_courses_closed = [n_closed]
 # FIXME                penalties[name] = penalties_courses_closed
             elif name == "stud_bad": # penalty if student cannot attend desired course
                 penalties_stud_bad = []
@@ -2088,8 +2126,14 @@ class Model:
             if top == "teacher":
                 for T, dict_penalties in d.items():
                     penalties_values.append(sum(dict_penalties.values()))
+            elif top == "closed":
+                penalties_values.append(d * I.PENALTIES["courses_closed"])
             elif top == "heavy":
                 penalties_values.append(sum(d.values()) * I.PENALTIES["heavy"])
+            elif top == "custom":
+                penalties_values.append(sum(d.values()) * I.PENALTIES["custom"])
+            else:
+                error(f"Unknown penalty domain: {top}")
 
 
         model.Minimize(sum(penalties_values))
@@ -2259,6 +2303,21 @@ class Model:
                 if penalties:
                     print("PENALTIES:")
                     total = 0
+
+                    n_heavy = 0
+                    l = []
+                    w = I.PENALTIES["heavy"]
+                    for (name, v) in penalties["heavy"].items():
+                        y = self.Value(v) # TODO
+                        if y != 0:
+                            n_heavy += y
+                            l.append(name)
+                    if not l:
+                        l.append("none")
+                    total_heavy = n_heavy * w
+                    print(f"Heavy ({n_heavy}*{w}={total_heavy}): {', '.join(l)}")
+                    total += total_heavy
+
                     total_teachers = 0
                     print("Teachers:")
                     # FIXME
@@ -2268,6 +2327,7 @@ class Model:
                         for p, v in d.items():
                             y = self.Value(v) # TODO have all values in R?
                             if y > 0:
+                                total_teachers += y
                                 l.append((p,y))
                                 s += y
                         if s:
@@ -2275,24 +2335,28 @@ class Model:
                             print(f" * {T}: {s} // {details}")
                         else:
                             debug(f" * {T} is happy")
-                    l = []
-                    w = I.PENALTIES["heavy"]
-                    for (name, v) in penalties["heavy"].items():
-                        y = self.Value(v) # TODO
-                        if y != 0:
-                            l.append(name)
-                    if not l:
-                        l.append("none")
-                    print(f"Heavy ({w}): {', '.join(l)}")
+                    print(f"Teachers total: {total_teachers}")
+                    total += total_teachers
+
+                    n_closed = self.Value(penalties["closed"])
+                    w = I.PENALTIES["courses_closed"]
+                    total_closed = n_closed * w
+                    print(f"Closed courses: {n_closed}*{w}={total_closed}")
+                    total += total_closed
+
+                    n_custom = 0
                     l = []
                     w = I.PENALTIES["custom"]
                     for (name, v) in penalties["custom"].items():
                         y = self.Value(v) # TODO
                         if y != 0:
+                            n_custom += y
                             l.append(name)
                     if not l:
                         l.append("none")
-                    print(f"Custom ({w}): {', '.join(l)}")
+                    total_custom = n_custom * w
+                    print(f"Custom ({n_custom}*{w}={total_custom}): {', '.join(l)}")
+                    total += total_custom
 #                    for (name, t) in penalties.items():
 #                        coeff, v = t
 #                        total += coeff * v
@@ -2312,7 +2376,6 @@ class Model:
                     for v in sorted(set(tn.values())):
                         print(f"{v}: {', '.join(t for t in tn if tn[t] == v)}")
                 print(f"TOTAL: {total}")
-                print(f"TEACHERS: {total_teachers}")
 
             debug(pprint.pformat(R))
             print_solution(R, M.penalties_analysis, self.ObjectiveValue())
