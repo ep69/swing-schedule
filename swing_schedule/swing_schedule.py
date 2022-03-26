@@ -95,14 +95,13 @@ class Input:
             #"Rhythm Pilots /2",
             ]
         self.courses_solo = [
-            #"Solo - choreography",
-            #"Solo - improvisation",
-            "Solo",
-            "Authentic Movement",
-            "Teachers Training /1",
+            "Solo - alone",
+            "Authentic Dance",
             "Blues/Slow Open Training",
             ]
         self.courses_regular = [
+            "Teachers Training /1",
+            "Solo - couple",
             "LH 1 - Beginners /1",
             "LH 1 - Beginners /2",
             "LH 1 - Beginners /3",
@@ -115,8 +114,7 @@ class Input:
             "LH 3 - Musicality",
             "LH 3 - Charleston",
             "LH 3 - Cool Moves and Styling",
-            "LH 4 - more technical",
-            "LH 4 - more philosophical",
+            "LH 4",
             "LH 5",
             "Charleston 1.5",
             "Charleston 2",
@@ -148,7 +146,8 @@ class Input:
 #            "Saint Louis Shag 2",
 #            "Balboa Advanced",
 #            "Blues 2",
-            "Authentic Movement",
+#            "Authentic Dance",
+            "Charleston 1.5",
             "Zumba s Tomem",
         ]
         for C, d in self.courses_extra.items():
@@ -315,25 +314,6 @@ class Input:
                 # TODO
                 return old
             d["ic"] = ic_filter(ic)
-# FIXME new structure
-#            mindays = row["Do you prefer to spend as few days as possible with teaching or not having many courses in one day?"]
-#            if mindays.startswith("I need to spend as few days as possible with teaching"):
-#                d["mindays"] = 1
-#            elif mindays.startswith("I prefer teaching less courses in one day"):
-#                d["mindays"] = -1
-#            elif mindays.startswith("I don't mind either"):
-#                d["mindays"] = 0
-#            else:
-#                error("Unknown mindays answer")
-#            splitok = row["How do you feel about waiting between courses?"]
-#            if splitok.startswith("I prefer courses following each other"):
-#                d["splitok"] = -1
-#            elif splitok.startswith("I like to rest between lessons"):
-#                d["splitok"] = 1
-#            elif splitok.startswith("Both are equally fine"):
-#                d["splitok"] = 0
-#            else:
-#                error("Unknown splitok answer")
 
             # role
             role = row["What is your dancing role?"]
@@ -456,16 +436,16 @@ class Input:
         result = None
         if course in self.courses:
             result = course
-        elif course == "LH 4 - techničtější":
-            result = "LH 4 - more technical"
-        elif course == "LH 4 - filozofičtější":
-            result = "LH 4 - more philosophical"
-        elif course == "Solo - improvizace":
-            result = "Solo - improvisation"
-        elif course == "Solo - choreografie":
-            result = "Solo - choreography"
+#        elif course == "LH 4 - techničtější":
+#            result = "LH 4"
+#        elif course == "LH 4 - filozofičtější":
+#            result = "LH 4"
+#        elif course == "Solo - improvizace":
+#            result = "Solo"
+#        elif course == "Solo - choreografie":
+#            result = "Solo"
         elif course == "Autentický pohyb":
-            result = "Authentic Movement"
+            result = "Authentic Dance"
         elif course == "Zumba s Tomem":
             result = "Zumba s Tomem"
         if not result:
@@ -2121,6 +2101,14 @@ class Model:
 
         #self.penalties = penalties
         self.penalties_analysis = penalties_analysis
+
+        debug(f"Model: penalties initialized")
+
+    # finalize penalties
+    def final_penalties(self):
+        I = self.I
+        model = self.model
+
         penalties_values = []
         for (top, d) in self.penalties.items():
             if top == "teacher":
@@ -2135,10 +2123,9 @@ class Model:
             else:
                 error(f"Unknown penalty domain: {top}")
 
-
         model.Minimize(sum(penalties_values))
 
-        debug(f"Model: penalties initialized")
+        debug(f"Model: penalties finalized")
 
     def print_stats(self):
         print(self.model.ModelStats())
@@ -2155,12 +2142,13 @@ class Model:
         if not name:
             # TODO probably not possible..
             name = f"{typ}-{len(self.penalties[typ])}"
+
         if name in self.penalties[typ]:
-            warn(f"Type {typ} penalty {name} already exists")
+            error(f"Type {typ} penalty {name} already exists")
             p = self.penalties[typ][name]
         else:
             debug(f"Type {typ} penalty {name} does not exist yet")
-            p = model.NewBoolVar("")
+            p = model.NewBoolVar(f"{typ}-{name}")
             self.penalties[typ][name] = p
 
         model.Add(*args).OnlyEnforceIf(p.Not())
@@ -2377,8 +2365,11 @@ class Model:
                         print(f"{v}: {', '.join(t for t in tn if tn[t] == v)}")
                 print(f"TOTAL: {total}")
 
+                if objective and objective != total:
+                    error(f"Mismatch of objective value: objective {objective} vs. total {total}")
+
             debug(pprint.pformat(R))
-            print_solution(R, M.penalties_analysis, self.ObjectiveValue())
+            print_solution(R, M.penalties_analysis, objective=self.ObjectiveValue())
             print()
 
     def solve(self):
