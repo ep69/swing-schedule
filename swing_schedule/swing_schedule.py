@@ -114,7 +114,8 @@ class Input:
             "LH 3 - Musicality",
             "LH 3 - Charleston",
             "LH 3 - Cool Moves and Styling",
-            "LH 4",
+            "LH 4 /1",
+            "LH 4 /2",
             "LH 5",
             "Charleston 1.5",
             "Charleston 2",
@@ -210,7 +211,7 @@ class Input:
         if Cspec.endswith("English"):
             #debug(f"is_course_type: {Cspec} {Cgen} {Cgen == Cspec}")
             return Cgen == Cspec
-        if Cspec.startswith("Collegiate Shag"):
+        if Cgen == "Collegiate Shag 1": # because of Collegiate Shag 1.5
             return Cgen == Cspec
         #debug(f"is_course_type: {Cspec} {Cgen} {Cspec.startswith(Cgen)}")
         return Cspec.startswith(Cgen)
@@ -310,10 +311,6 @@ class Input:
             for ic_name, ic_id in ICN.items():
                 val = ICW[row[f"How inconvenient are following situations for you? [{ic_name}]"]]
                 ic[ic_id] = val
-            def ic_filter(old):
-                # TODO
-                return old
-            d["ic"] = ic_filter(ic)
 
             # role
             role = row["What is your dancing role?"]
@@ -404,6 +401,14 @@ class Input:
                 self.teachers.append(name)
             else:
                 warn(f"Teacher {name} already known, probably re-reading")
+            def ic_filter(old):
+                # TODO
+                new = old
+                if old["no_perfect"] and 3 not in courses_teach_primary.values():
+                    warn(f"ic_filter: {name}: no perfect course, zeroing.")
+                    new["no_perfect"] = 0
+                return old
+            d["ic"] = ic_filter(ic)
             result[name] = d
         debug(f"Number of lines: {n}")
         debug(f"Result: {'|'.join(result)}")
@@ -679,12 +684,12 @@ class Input:
 #            # person-related
 #            "teach_together": 25,
 #            # overall schedule
-            "courses_closed": 150,
+            "courses_closed": 50,
 #            # serious penalties
 #            "everybody_teach": 50,
             # students
             "stud_bad": 20,
-            "custom": 150,
+            "custom": 100,
             "heavy": 1000000,
             "teacher": 1000,
         }
@@ -961,7 +966,7 @@ class Model:
             self.occupied_num[p] = model.NewIntVar(0, len(I.slots), "")
             model.Add(self.occupied_num[p] == sum(self.ps[(p,s)] for s in range(len(I.slots))))
 
-        # prevent teachers from teaching in two rooms in the same time
+        # prevent teachers from teaching two courses at the same time
         for t in range(len(I.teachers)):
             for s in range(len(I.slots)):
                 model.Add(sum(self.tsc[(t,s,c)] for c in range(len(I.courses))) <= 1)
@@ -1245,6 +1250,7 @@ class Model:
                     model.Add(more2 == util_diff_pos * icw["2more"]).OnlyEnforceIf(zero2.Not())
                     self.penalties["teacher"][T]["2more"] = more2
 
+
                     # utilization - definitely not more than 2 extra courses
                     M.add_heavy(f"3more-{T}", util_diff_pos <= 2)
 
@@ -1290,6 +1296,8 @@ class Model:
                     model.Add(p22 == icw["2c2d"] * days_extra)
                     self.penalties["teacher"][T]["2c2d"] = p22
 
+                    self.add_heavy(f"2extradays-{T}", days_extra < 2)
+
                     # not_teaching
                     p_not_teaching = model.NewIntVar(0, icw["not_teaching"], "")
                     model.Add(p_not_teaching == teaches_some.Not() * icw["not_teaching"])
@@ -1297,6 +1305,7 @@ class Model:
 
                     # teaching during Teachers Training
                     w = icw["tt"]
+                    # FIXME - take into account if teacher is unavailable according to time preferences
                     l = []
                     for s in range(len(I.slots)):
                         hit = model.NewBoolVar("")
@@ -2072,19 +2081,19 @@ class Model:
                     debug(f"analysis stud_bad: total missed: {total_bad}, total OK: {total_ok}")
                     return result
                 penalties_analysis[name] = analysis
-            elif name == "custom":
-                penalties_custom = self.custom_penalties.values()
-# FIXME                penalties[name] = penalties_custom
-                def analysis(R):
-                    src = R.src
-                    tc = R.tc
-                    cp = R.custom_penalties
-                    result = []
-                    for name, v in cp.items():
-                        if v:
-                            result.append(name)
-                    return result
-                penalties_analysis[name] = analysis
+#            elif name == "custom":
+#                penalties_custom = self.custom_penalties.values()
+#                penalties[name] = penalties_custom
+#                def analysis(R):
+#                    src = R.src
+#                    tc = R.tc
+#                    cp = R.custom_penalties
+#                    result = []
+#                    for name, v in cp.items():
+#                        if v:
+#                            result.append(name)
+#                    return result
+#                penalties_analysis[name] = analysis
 #            elif name == "heavy":
 #                #penalties_heavy = self.heavy_penalties.values()
 #                penalties[name] = self.heavy_penalties
@@ -2432,3 +2441,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# TODO
+    # "not teaching during TT" should also look at person's availability in time preferences

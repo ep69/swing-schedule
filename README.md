@@ -11,5 +11,5 @@ python3 -m pip install --upgrade --user -r requirements.txt
 
 ## Run
 ```
-python3 swing_schedule/swing_schedule.py -t data/teachers.csv -s data/students.csv
+python3 swing_schedule/swing_schedule.py -t data/teachers.csv
 ```
