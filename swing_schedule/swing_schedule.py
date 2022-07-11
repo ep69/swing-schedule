@@ -70,8 +70,8 @@ class Input:
         self.rooms = [
             #"big",
             #"small",
-            "k-3",
-            "k-4",
+            "k3",
+            "k4",
         ]
         self.Rooms = {}
         for i, R in enumerate(self.rooms):
@@ -83,8 +83,8 @@ class Input:
             self.Venues[V] = i
 
         self.rooms_venues = {
-            "k-3": "koliste",
-            "k-4": "koliste",
+            "k3": "koliste",
+            "k4": "koliste",
             }
 
         self.courses_open = [
@@ -2268,7 +2268,7 @@ class Model:
                                 else:
                                     Ts_print = f"{Ts[0]}"
                                 #print(f"{I.slots[s]: <11}{I.rooms[r]: <5}{'+'.join(Ts): <19}{I.courses[c]}")
-                                print(f"{I.slots[s]: <11}{I.rooms[r]: <5}{Ts_print: <22}{I.courses[c]}")
+                                print(f"{I.slots[s]: <11}{I.rooms[r]: <4}{Ts_print: <21}{I.courses[c]}")
                 if penalties:
                     print("PENALTIES:")
                     total = 0
