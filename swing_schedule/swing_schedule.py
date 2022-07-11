@@ -89,65 +89,34 @@ class Input:
 
         self.courses_open = [
             "Shag/Balboa Open Training",
-            "Lindy/Charleston Open Training",
-            "Teachers Training /2",
+            #"Lindy/Charleston Open Training",
+            "Teachers Training", # TODO
             #"Rhythm Pilots /1",
             #"Rhythm Pilots /2",
-            ]
-        self.courses_solo = [
-            "Solo - alone",
-            "Authentic Dance",
             "Blues/Slow Open Training",
             ]
+        self.courses_solo = [
+            "Solo",
+            ]
         self.courses_regular = [
-            "Teachers Training /1",
-            "Solo - couple",
-            "LH 1 - Beginners /1",
-            "LH 1 - Beginners /2",
-            "LH 1 - Beginners /3",
-            "LH 1 - English",
-            "LH 2 - Party Moves",
-            "LH 2 - Party Moves - English",
-            "LH 2 - Survival Guide",
-            "LH 2.5 - Swingout /1",
-            "LH 2.5 - Swingout /2",
-            "LH 3 - Musicality",
-            "LH 3 - Charleston",
-            "LH 3 - Cool Moves and Styling",
-            "LH 4 /1",
-            "LH 4 /2",
-            "LH 5",
-            "Charleston 1.5",
-            "Charleston 2",
-            "Everybody Leads - Everybody Follows",
-            "Collegiate Shag 1",
-            "Collegiate Shag 1.5",
-            "Collegiate Shag 2",
-            "Balboa Beginners",
-            "Balboa Intermediate",
-            "Balboa Advanced",
-            "Slow Balboa 1",
-            "Slow Balboa 2",
-            "Airsteps 1",
-            "Airsteps 2",
-            "Saint Louis Shag 1",
-            "Saint Louis Shag 2",
-            "Blues 1",
-            "Blues 2",
+            "LH Newbies /1",
+            "LH Newbies /2",
+            "LH Newbies /3",
+            "LH Beg /1",
+            "LH Beg /2",
+            "LH Beg/Int /1",
+            "LH Beg/Int /2",
+            "LH Int",
+            "LH Int/Adv",
+            "Balboa Beg",
+            "Balboa Int",
+            "Collegiate Shag Beg",
+            "Collegiate Shag Int/Adv",
+            "Collegiate Shag Choreo",
+            "Blues Beg",
+            "Airsteps",
             ]
         self.COURSES_IGNORE = [
-#            "LH 1 - Beginners /3", #
-#            #"LH 1 - English",
-#            #"LH 2.5 - Swingout /2", #
-#            #"LH 3 - Musicality",
-#            "LH 5",
-#            "Airsteps 1",
-#            "Airsteps 2",
-#            "Saint Louis Shag 1",
-#            "Saint Louis Shag 2",
-#            "Balboa Advanced",
-#            "Blues 2",
-#            "Authentic Dance",
             "Charleston 1.5",
             "Zumba s Tomem",
         ]
@@ -208,13 +177,16 @@ class Input:
         return result
 
     def is_course_type(self, Cspec, Cgen):
+        result = None
         if Cspec.endswith("English"):
             #debug(f"is_course_type: {Cspec} {Cgen} {Cgen == Cspec}")
-            return Cgen == Cspec
-        if Cgen == "Collegiate Shag 1": # because of Collegiate Shag 1.5
-            return Cgen == Cspec
-        #debug(f"is_course_type: {Cspec} {Cgen} {Cspec.startswith(Cgen)}")
-        return Cspec.startswith(Cgen)
+            result = Cgen == Cspec
+        elif Cgen == "Collegiate Shag 1": # TODO
+            result = Cgen == Cspec
+        else:
+            result = Cspec.startswith(Cgen)
+        debug(f"is_course_type: {Cspec} {Cgen} {result}")
+        return result
 
     def check_course(self, course):
         for Cspec in self.courses:
@@ -1199,7 +1171,7 @@ class Model:
                 total_teacher = coeff
 
                 tt_map = []
-                c = I.Courses["Teachers Training /1"]
+                c = I.Courses["Teachers Training"]
                 for s in range(len(I.slots)):
                     hit = model.NewBoolVar("")
                     model.Add(M.cs[c] == s).OnlyEnforceIf(hit)
@@ -1313,7 +1285,7 @@ class Model:
                         model.AddBoolOr([tt_map[s].Not(), M.ts[(t,s)].Not()]).OnlyEnforceIf(hit.Not())
                         l.append(hit)
                     teaches_tt = model.NewBoolVar("")
-                    c = I.Courses["Teachers Training /1"]
+                    c = I.Courses["Teachers Training"]
                     model.Add(M.tc[(t,c)] == 1).OnlyEnforceIf(teaches_tt)
                     model.Add(M.tc[(t,c)] == 0).OnlyEnforceIf(teaches_tt.Not())
                     teaches_tt_time = model.NewBoolVar("")
