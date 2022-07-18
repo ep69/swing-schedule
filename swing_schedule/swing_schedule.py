@@ -5,6 +5,7 @@ import csv
 import argparse
 from ortools.sat.python import cp_model
 import pprint
+import regex
 
 VERBOSE = False
 
@@ -108,12 +109,14 @@ class Input:
             "LH Beg/Int /2",
             "LH Int",
             "LH Int/Adv",
+            "LH Adv",
             "Balboa Beg",
             "Balboa Int",
             "Collegiate Shag Beg",
             "Collegiate Shag Int/Adv",
             "Collegiate Shag Choreo",
             "Blues Beg",
+            "Blues Int",
             "Airsteps",
             ]
         self.COURSES_IGNORE = [
@@ -167,7 +170,7 @@ class Input:
             self.Teachers[t] = i
 
         # caring only about teachers for now
-        self.people = self.teachers
+        self.people = self.teachers # FIXME
 
 
     def translate_teacher_name(self, name):
@@ -176,16 +179,21 @@ class Input:
         debug(f"Translated '{name}' to '{result}'")
         return result
 
-    def is_course_type(self, Cspec, Cgen):
+    def is_course_type(self, Cspecn, Cgen):
+        courses_with_subprefix = [
+            "LH Beg",
+            "LH Int",
+            "Collegiate Shag Int",
+        ]
+        Cspec = regex.sub(" /\d+$", "", Cspecn)
         result = None
         if Cspec.endswith("English"):
-            #debug(f"is_course_type: {Cspec} {Cgen} {Cgen == Cspec}")
             result = Cgen == Cspec
-        elif Cgen == "Collegiate Shag 1": # TODO
+        elif Cgen in courses_with_subprefix:
             result = Cgen == Cspec
         else:
             result = Cspec.startswith(Cgen)
-        debug(f"is_course_type: {Cspec} {Cgen} {result}")
+        debug(f"is_course_type: '{Cspecn}' '{Cspec}' '{Cgen}' {result}")
         return result
 
     def check_course(self, course):
@@ -232,7 +240,7 @@ class Input:
             # handle the input data
             debug("")
             who = row["Who are you?"]
-            if who.startswith("IGNORE"):
+            if who.startswith("IGNORE") or not any(row.values()): # explicitly ignored row or empty row
                 debug(f"read_teachers_input: skipping row {row}")
                 continue
             name = self.translate_teacher_name(who)
@@ -410,9 +418,18 @@ class Input:
             self.input_data[k] = students_data[k]
 
     def translate_course_cs_en(self, course):
+        if course == "Autentický pohyb":
+            Cstud = "Authentic Dance"
+        else:
+            Cstud = course
+
         result = None
-        if course in self.courses:
-            result = course
+        for C in self.courses:
+            if self.is_course_type(C, Cstud):
+                debug(f"student course {course} maps, e.g., to {C}")
+                result = Cstud
+        #if course in self.courses:
+            #result = course
 #        elif course == "LH 4 - techničtější":
 #            result = "LH 4"
 #        elif course == "LH 4 - filozofičtější":
@@ -421,12 +438,9 @@ class Input:
 #            result = "Solo"
 #        elif course == "Solo - choreografie":
 #            result = "Solo"
-        elif course == "Autentický pohyb":
-            result = "Authentic Dance"
-        elif course == "Zumba s Tomem":
-            result = "Zumba s Tomem"
         if not result:
-            error(f"Unknown student course {course}")
+            result = Cstud
+            debug(f"Unknown student course '{course}'")
         return result
 
     def read_students_input(self, csv_file):
@@ -878,19 +892,20 @@ class Model:
 #                model.Add(sum(self.ps[(p,s)] for s in range(d*len(I.times), (d+1)*len(I.times))) >= 1).OnlyEnforceIf(self.pd[(p,d)])
 #                model.Add(sum(self.ps[(p,s)] for s in range(d*len(I.times), (d+1)*len(I.times))) == 0).OnlyEnforceIf(self.pd[(p,d)].Not())
 #
-#        # when do we consider person occupied according to slot preferences
-#        occ_thres = 0
-#        for s in range(len(I.slots)):
-#            for P in I.people:
-#                p = I.Teachers[P] # only teachers are people for now
-#                model.Add(I.ts_pref[P][s] <= occ_thres).OnlyEnforceIf(self.ps_occupied[(p,s)])
-#                model.Add(I.ts_pref[P][s] > occ_thres).OnlyEnforceIf(self.ps_occupied[(p,s)].Not())
-#
-#        for s in range(len(I.slots)):
-#            for P in I.people:
-#                p = I.Teachers[P] # only teachers are people for now
-#                model.AddBoolOr([self.ts[(p,s)], self.ps_occupied[(p,s)]]).OnlyEnforceIf(self.ps_na[(p,s)])
-#                model.AddBoolAnd([self.ts[(p,s)].Not(), self.ps_occupied[(p,s)].Not()]).OnlyEnforceIf(self.ps_na[(p,s)].Not())
+        # when do we consider person occupied according to slot preferences
+        occ_thres = 0
+        for s in range(len(I.slots)):
+            for P in I.people:
+                # FIXME
+                p = I.Teachers[P] # only teachers are people for now
+                model.Add(I.ts_pref[P][s] <= occ_thres).OnlyEnforceIf(self.ps_occupied[(p,s)])
+                model.Add(I.ts_pref[P][s] > occ_thres).OnlyEnforceIf(self.ps_occupied[(p,s)].Not())
+
+        for s in range(len(I.slots)):
+            for P in I.people:
+                p = I.Teachers[P] # only teachers are people for now
+                model.AddBoolOr([self.ts[(p,s)], self.ps_occupied[(p,s)]]).OnlyEnforceIf(self.ps_na[(p,s)])
+                model.AddBoolAnd([self.ts[(p,s)].Not(), self.ps_occupied[(p,s)].Not()]).OnlyEnforceIf(self.ps_na[(p,s)].Not())
 #
         # inferring TDV info
         for s in range(len(I.slots)):
@@ -1275,14 +1290,13 @@ class Model:
                     model.Add(p_not_teaching == teaches_some.Not() * icw["not_teaching"])
                     self.penalties["teacher"][T]["not_teaching"] = p_not_teaching
 
-                    # teaching during Teachers Training
+                    # teaching or not being available during Teachers Training
                     w = icw["tt"]
-                    # FIXME - take into account if teacher is unavailable according to time preferences
                     l = []
                     for s in range(len(I.slots)):
                         hit = model.NewBoolVar("")
-                        model.AddBoolAnd([tt_map[s], M.ts[(t,s)]]).OnlyEnforceIf(hit)
-                        model.AddBoolOr([tt_map[s].Not(), M.ts[(t,s)].Not()]).OnlyEnforceIf(hit.Not())
+                        model.AddBoolAnd([tt_map[s], M.ps_na[(t,s)]]).OnlyEnforceIf(hit)
+                        model.AddBoolOr([tt_map[s].Not(), M.ps_na[(t,s)].Not()]).OnlyEnforceIf(hit.Not())
                         l.append(hit)
                     teaches_tt = model.NewBoolVar("")
                     c = I.Courses["Teachers Training"]
@@ -1294,7 +1308,6 @@ class Model:
                     p_tt = model.NewIntVar(0, w, "")
                     model.Add(p_tt == teaches_tt_time * w)
                     self.penalties["teacher"][T]["tt"] = p_tt
-
 
                     # split
                     days_split = model.NewIntVar(0, len(I.days), "TDsplit:%i" % t)
@@ -2170,13 +2183,13 @@ class Model:
                     R.tc_lead[(t,c)] = self.Value(M.tc_lead[(t,c)])
                     R.tc_follow[(t,c)] = self.Value(M.tc_follow[(t,c)])
             for P in I.people:
-                p = I.Teachers[P]
+                p = I.Teachers[P] # FIXME
                 teach_courses = [I.courses[c] for c in range(len(I.courses)) if self.Value(M.tc[(p,c)])]
                 ta_courses = [I.courses[c] for c in range(len(I.courses)) if self.Value(M.pc[(p,c)])]
                 attend_courses = list(set(ta_courses) - set(teach_courses))
-                debug(f"PSPD: {P} teaches {', '.join(teach_courses)}")
-                debug(f"PSPD: {P} attends {', '.join(attend_courses)}")
-                debug(f"PSPD: {P} teaches or attends {', '.join(ta_courses)}")
+                #debug(f"PSPD: {P} teaches {', '.join(teach_courses)}")
+                #debug(f"PSPD: {P} attends {', '.join(attend_courses)}")
+                #debug(f"PSPD: {P} teaches or attends {', '.join(ta_courses)}")
                 na = "".join(["1" if self.Value(M.ps_na[(p,s)]) else "0" for s in range(len(I.slots))])
                 ps = "".join(["1" if self.Value(M.ps[(p,s)]) else "0" for s in range(len(I.slots))])
                 ts = "".join(["1" if self.Value(M.ts[(p,s)]) else "0" for s in range(len(I.slots))])
@@ -2188,9 +2201,9 @@ class Model:
                 debug(f"PSPD: na {na}")
                 debug(f"PSPD: os {os}")
                 debug(f"PSPD: ts {ts}")
-                debug(f"PSPD: As {As}")
-                debug(f"PSPD: ps {ps}")
-                debug(f"ps/pd analysis: {P :<9} os {os} ts {ts} as {As} ps {ps} na {na} num {self.Value(M.occupied_num[p])} days {days}")
+                #debug(f"PSPD: As {As}")
+                #debug(f"PSPD: ps {ps}")
+                #debug(f"ps/pd analysis: {P :<9} os {os} ts {ts} as {As} ps {ps} na {na} num {self.Value(M.occupied_num[p])} days {days}")
 #                m += " slots "
 #                for s in range(len(I.slots)):
 #                    if self.Value(M.ps[(p,s)]):
@@ -2326,6 +2339,9 @@ class Model:
                     total_custom = n_custom * w
                     print(f"Custom ({n_custom}*{w}={total_custom}): {', '.join(l)}")
                     total += total_custom
+
+                    print("Students:")
+                    # FIXME
 #                    for (name, t) in penalties.items():
 #                        coeff, v = t
 #                        total += coeff * v
