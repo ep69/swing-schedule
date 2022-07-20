@@ -1818,16 +1818,6 @@ class Model:
         if statusname not in ["FEASIBLE", "OPTIMAL"]:
             error(f"Solution NOT found - status {statusname}")
 
-        print()
-        print(f"Teachers' utilization:")
-        for n in range(len(self.I.slots)):
-            Ts = []
-            for T in self.I.teachers:
-                if solver.Value(self.teach_num[self.I.Teachers[T]]) == n:
-                    Ts.append(T)
-            if Ts:
-                print(f"{n}: {' '.join(Ts)}")
-
 
 # The worst argument parser in the history of argument parsers, maybe ever.
 def parse(argv=None):
