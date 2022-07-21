@@ -1762,6 +1762,8 @@ class Model:
 
                     print("Students:")
                     total_students = 0
+                    happiness_sum = 0
+                    happiness_count = 0
                     students_hh = {} # Happiness Histogram
                     for S, d in penalties["student"].items():
                         l = []
@@ -1781,11 +1783,13 @@ class Model:
                         hh_item = students_hh.get(happiness, [])
                         hh_item.append(S)
                         students_hh[happiness] = hh_item
+                        happiness_sum += happiness
+                        happiness_count += 1
 
                     for v in sorted(students_hh.keys()):
                         print(f" * {v:>3}%: {len(students_hh[v]):>3} ({' '.join(students_hh[v])})")
                     total_students = total_students * I.PENALTIES["student"] // 100
-                    print(f"Students total: {total_students}")
+                    print(f"Students total: {total_students} ({happiness_sum//happiness_count}%)")
                     total += total_students
 
                 if utilization:
