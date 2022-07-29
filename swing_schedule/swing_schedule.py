@@ -1553,6 +1553,8 @@ class Model:
     def add_rule(self, typ, name, *args):
         model = self.model
 
+        debug(f"Adding rule type '{typ}' name '{name}' args '{args}'")
+        debug(f"Current penalties of type '{typ}': {self.penalties[typ]}")
         if not name:
             # TODO probably not possible..
             name = f"{typ}-{len(self.penalties[typ])}"
