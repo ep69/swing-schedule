@@ -996,16 +996,23 @@ class Model:
 
         # SPECIFIC CONSTRAINTS
 
+        self.penalties = {} # penalties data (model variables)
+        self.penalties["heavy"] = {}
+        self.penalties["custom"] = {}
+
         # unspecified teachers teach no courses
         for T in I.teachers:
             debug(f"Teacher max: {T} {I.t_util_max.get(T,-1)}")
             model.Add(sum(self.tc[(I.Teachers[T],c)] for c in range(len(I.courses))) <= I.t_util_max.get(T, 0))
 
+        debug(f"Courses that must open: {', '.join(I.courses_must_open)}")
         for C in I.courses_must_open:
-            model.Add(self.c_active[I.Courses[C]] == 1)
+            #model.Add(self.c_active[I.Courses[C]] == 1)
+            self.add_heavy(f"mustopen-{C}", self.c_active[I.Courses[C]] == 1)
 
         for C in I.courses_not_open:
-            model.Add(self.c_active[I.Courses[C]] == 0)
+            #model.Add(self.c_active[I.Courses[C]] == 0)
+            self.add_heavy(f"notopen-{C}", self.c_active[I.Courses[C]] == 0)
 
 #        # community teachers that must teach
 #        for T in ["Zuzka", "Vojta-N.", "Míša-L.", "Kuba-B."]:
@@ -1169,10 +1176,6 @@ class Model:
         model = self.model
 
         # OPTIMIZATION
-
-        self.penalties = {} # penalties data (model variables)
-        self.penalties["heavy"] = {}
-        self.penalties["custom"] = {}
 
         self.wish = {}
         for T in I.Teachers:
@@ -1791,7 +1794,8 @@ class Model:
                     for v in sorted(students_hh.keys()):
                         print(f" * {v:>3}%: {len(students_hh[v]):>3} ({' '.join(students_hh[v])})")
                     total_students = total_students * I.PENALTIES["student"] // 100
-                    print(f"Students total: {total_students} ({happiness_sum//happiness_count}%)")
+                    if happiness_count:
+                        print(f"Students total: {total_students} ({happiness_sum//happiness_count}%)")
                     total += total_students
 
                 if utilization:
