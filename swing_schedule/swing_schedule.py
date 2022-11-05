@@ -524,6 +524,8 @@ class Input:
         self.t_util_max = {}
         # teacher T wants to teach N courses
         self.t_util_ideal = {}
+        # HARD teacher T can teach maximum N days
+        self.t_days_max = {}
         # HARD teacher T1 must not teach a course with teacher T2
         self.tt_not_together = []
         # SOFT teacher T wants to teach a course with teachers Ts
@@ -580,8 +582,9 @@ class Input:
                 error(f"Bad person type? {T}")
                 continue
             self.t_util_max[T] = data["ncourses_max"]
-            if self.t_util_max[T] == 0:
-                # could be warning, it is probably legit to just say 0 max_courses
+            self.t_days_max[T] = data["ndays_max"]
+            if self.t_util_max[T] == 0 or self.t_days_max[T] == 0:
+                # could be warning, it is probably legit to just say 0 max_courses/madays
                 # but if it happens, logic should be moved to CSV parsing
                 error(f"Removing (probably too late) the inactive teacher: {T}")
                 self.teachers.remove(T)
@@ -1009,10 +1012,11 @@ class Model:
         self.penalties["heavy"] = {}
         self.penalties["custom"] = {}
 
-        # unspecified teachers teach no courses
         for T in I.teachers:
             debug(f"Teacher max: {T} {I.t_util_max.get(T,-1)}")
-            model.Add(sum(self.tc[(I.Teachers[T],c)] for c in range(len(I.courses))) <= I.t_util_max.get(T, 0))
+            # unspecified teachers teach no courses
+            self.add_heavy(f"{T}-ncourses", sum(self.tc[(I.Teachers[T],c)] for c in range(len(I.courses))) <= I.t_util_max.get(T, 0))
+            self.add_heavy(f"{T}-ndays", sum(self.td[(I.Teachers[T],d)] for d in range(len(I.days))) <= I.t_days_max.get(T, 0))
 
         debug(f"Courses that must open: {', '.join(I.courses_must_open)}")
         for C in I.courses_must_open:
@@ -1845,7 +1849,7 @@ def parse(argv=None):
     parser.add_argument("-s", "--students", action="store", dest="students", help="Students' preferences CSV")
     parser.add_argument("-t", "--teachers", action="store", dest="teachers", help="Teachers' preferences CSV")
     parser.add_argument("-p", "--penalty", action="append", dest="penalties", help="Penalty value 'name:X'")
-    parser.add_argument("-e", "--exclude-teacher", action="append", dest="excluded_teachers", help="Ignore teacher")
+    parser.add_argument("-e", "--exclude-teacher", action="append", default=[], dest="excluded_teachers", help="Ignore teacher")
     args = parser.parse_args()
 
     if args.verbose:
