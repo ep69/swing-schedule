@@ -33,15 +33,15 @@ def stop():
     sys.exit(100)
 
 class Input:
-    def init(self, teachers_csv, penalties={}, students_csv=None, extra_courses=[]):
+    def init(self, teachers_csv, penalties={}, students_csv=None, extra_courses=[], excluded_teachers=[]):
         self.init_constants()
-        self.init_form(teachers_csv, students_csv, extra_courses)
+        self.init_form(teachers_csv, students_csv, extra_courses, excluded_teachers)
         self.init_teachers()
         self.init_rest()
         self.init_penalties(penalties)
 
-    def init_form(self, teachers_csv, students_csv=None, extra_courses=[]):
-        self.init_teachers_form(teachers_csv, extra_courses)
+    def init_form(self, teachers_csv, students_csv=None, extra_courses=[], excluded_teachers=[]):
+        self.init_teachers_form(teachers_csv, extra_courses, excluded_teachers)
         if students_csv is not None:
             self.init_students_form(students_csv)
         info(pprint.pformat(self.input_data))
@@ -203,7 +203,8 @@ class Input:
                 return
         error(f"check_course: unknown course: '{course}'")
 
-    def read_teachers_input(self, infile=None, extra_courses=[]):
+    def read_teachers_input(self, infile=None, extra_courses=[], excluded_teachers=[]):
+        debug(f"read_teachers_input: Excluded teachers: {', '.join(excluded_teachers)}")
         if infile:
             debug(f"Opening {infile}")
             f = open(infile, mode="r")
@@ -243,6 +244,9 @@ class Input:
             if who.startswith("IGNORE") or not any(row.values()): # explicitly ignored row or empty row
                 debug(f"read_teachers_input: skipping row {row}")
                 continue
+            if who in excluded_teachers:
+                info(f"Skipping teacher {who}")
+                continue
             name = self.translate_teacher_name(who)
             debug(f"Reading: name {name}")
             if name in result:
@@ -261,6 +265,11 @@ class Input:
             d["type"] = "teacher"
             d["ncourses_ideal"] = int(row["How many courses would you ideally like to teach?"])
             d["ncourses_max"] = int(row["How many courses are you able to teach at most?"])
+            d["ndays_max"] = int(row["How many days are you able to teach at most?"])
+            if row["Are you fine with teaching in English?"] == "Yes":
+                d["english"] = True
+            else:
+                d["english"] = False
             slots = []
             for day in ["Mon", "Tue", "Wed", "Thu"]:
                 for time in ["17:30", "18:50", "20:10"]:
@@ -403,8 +412,8 @@ class Input:
         #print(f"Column names: {columns}")
         return result
 
-    def init_teachers_form(self, infile=None, extra_courses=[]):
-        teachers_data = self.read_teachers_input(infile, extra_courses)
+    def init_teachers_form(self, infile=None, extra_courses=[], excluded_teachers=[]):
+        teachers_data = self.read_teachers_input(infile, extra_courses, excluded_teachers)
         debug("TEACHERS' ANSWERS:")
         debug(pprint.pformat(teachers_data))
         self.input_data = teachers_data
@@ -1836,6 +1845,7 @@ def parse(argv=None):
     parser.add_argument("-s", "--students", action="store", dest="students", help="Students' preferences CSV")
     parser.add_argument("-t", "--teachers", action="store", dest="teachers", help="Teachers' preferences CSV")
     parser.add_argument("-p", "--penalty", action="append", dest="penalties", help="Penalty value 'name:X'")
+    parser.add_argument("-e", "--exclude-teacher", action="append", dest="excluded_teachers", help="Ignore teacher")
     args = parser.parse_args()
 
     if args.verbose:
@@ -1847,14 +1857,14 @@ def parse(argv=None):
             name, value = x.split(":")
             penalties[name] = int(value)
 
-    return (args.teachers, args.students, penalties)
+    return (args.teachers, args.students, penalties, args.excluded_teachers)
 
 def main():
-    teach_csv, stud_csv, penalties = parse()
+    teach_csv, stud_csv, penalties, excluded_teachers = parse()
 
     # all input information
     input = Input()
-    input.init(teach_csv, students_csv=stud_csv, penalties=penalties)
+    input.init(teach_csv, students_csv=stud_csv, penalties=penalties, excluded_teachers=excluded_teachers)
 
     # model construction
     model = Model()
