@@ -107,7 +107,13 @@ class Input:
             "LH Beg /2",
             "LH Beg/Int /1",
             "LH Beg/Int /2",
-            "LH Int",
+            "LH Beg/Int /3",
+#            "LH Beg/Int /4",
+#            "LH Beg/Int /5",
+#            "LH Beg/Int /6",
+#            "LH Beg/Int /7",
+            "LH Int /1",
+            "LH Int /2",
             "LH Int/Adv",
             "LH Adv",
             "Balboa Beg",
@@ -117,7 +123,8 @@ class Input:
             "Collegiate Shag Choreo",
             "Blues Beg",
             "Blues Int",
-            "Airsteps",
+            "Airsteps 1",
+            "Airsteps 2",
             ]
         self.COURSES_IGNORE = [
             "Charleston 1.5",
@@ -323,7 +330,11 @@ class Input:
 #                elif C == "Charleston 2": # TODO
 #                    pass
 #                else:
-                answer = row[f"What courses would you like to teach in your primary role? [{C}]"]
+                if C.startswith("Airsteps"):
+                    C_answer = "Airsteps"
+                else:
+                    C_answer = C
+                answer = row[f"What courses would you like to teach in your primary role? [{C_answer}]"]
                 if not answer:
                     warn(f"{name} provided no answer for {C}, defaulting to 0")
                     answer_num = 0
@@ -561,6 +572,8 @@ class Input:
         self.courses_must_open = []
         # course Cx that must not open
         self.courses_not_open = []
+        # strict C -> slot mapping
+        self.courses_slots_strict = {}
         # course Cx must happen on different day and at different time than Cy (and Cz)
         self.courses_different = []
         # course Cx must happen on different day than Cy (and Cz)
@@ -689,8 +702,9 @@ class Input:
 #            "everybody_teach": 50,
             # students
             "student": 24, # absolutely unhappy student
-            "custom": 100,
+            "custom": 300,
             "heavy": 1000000,
+            "very_heavy": 100000000,
             "teacher": 1000,
         }
         #self.BOOSTER = 2
@@ -1010,6 +1024,7 @@ class Model:
 
         self.penalties = {} # penalties data (model variables)
         self.penalties["heavy"] = {}
+        self.penalties["very_heavy"] = {}
         self.penalties["custom"] = {}
 
         for T in I.teachers:
@@ -1028,7 +1043,7 @@ class Model:
             self.add_heavy(f"notopen-{C}", self.c_active[I.Courses[C]] == 0)
 
 #        # community teachers that must teach
-#        for T in ["Zuzka", "Vojta-N.", "Míša-L.", "Kuba-B."]:
+#        for T in ["Zuzka", "Vojta-N.", "Míša-Š.", "Kuba-B."]:
 #            if I.t_util_max.get(T, 0) >= 1:
 #                model.Add(sum(self.tc[(I.Teachers[T],c)] for c in range(len(I.courses))) >= 1)
 #            else:
@@ -1074,7 +1089,7 @@ class Model:
             # no other teacher can teach C
             model.Add(sum(self.tc_follow[(t,c)] for t in teachers_not) == 0)
 
-        for T1, T2 in I.tt_not_together:
+        for T1, T2 in set(I.tt_not_together):
             for c in range(len(I.courses)):
                 model.Add(sum(self.tc[(t,c)] for t in [I.Teachers[T1], I.Teachers[T2]]) < 2)
 
@@ -1092,6 +1107,11 @@ class Model:
                         model.Add(self.ts[(I.Teachers[T], s)] == 0)
             else:
                 warn(f"No slot preferences for teacher {T}")
+
+        # strict course -> slot mapping
+        debug(f"I.courses_slots_strict: {I.courses_slots_strict}")
+        for C, s in I.courses_slots_strict.items():
+            self.add_heavy(f"cs-strict-{C}", self.cs[I.Courses[C]] == s)
 
         # same courses should not happen in same days and also not in same times
         # it should probably not be a strict limitation, but it is much easier to write
@@ -1286,7 +1306,7 @@ class Model:
                     # 2c2d - courses in more days than needed
                     teaches_days = model.NewIntVar(0, len(I.days), "TD:%i" % t)
                     model.Add(teaches_days == sum(M.td[(t,d)] for d in range(len(I.days))))
-                    teaches_minus_1 = model.NewIntVar(0, len(I.days), "Tm1:%i" % t)
+                    teaches_minus_1 = model.NewIntVar(0, len(I.slots), "Tm1:%i" % t)
                     teaches_some = model.NewBoolVar("Ts:%i" % t)
                     model.Add(M.teach_num[t] >= 1).OnlyEnforceIf(teaches_some)
                     model.Add(M.teach_num[t] == 0).OnlyEnforceIf(teaches_some.Not())
@@ -1548,6 +1568,8 @@ class Model:
                 penalties_values.append(d * I.PENALTIES["courses_closed"])
             elif top == "heavy":
                 penalties_values.append(sum(d.values()) * I.PENALTIES["heavy"])
+            elif top == "very_heavy":
+                penalties_values.append(sum(d.values()) * I.PENALTIES["very_heavy"])
             elif top == "custom":
                 penalties_values.append(sum(d.values()) * I.PENALTIES["custom"])
             else:
@@ -1559,6 +1581,9 @@ class Model:
 
     def print_stats(self):
         print(self.model.ModelStats())
+
+    def add_very_heavy(self, name, *args):
+        self.add_rule("very_heavy", name, *args)
 
     def add_heavy(self, name, *args):
         self.add_rule("heavy", name, *args)
@@ -1737,6 +1762,20 @@ class Model:
                     total_heavy = n_heavy * w
                     print(f"Heavy ({n_heavy}*{w}={total_heavy}): {', '.join(l)}")
                     total += total_heavy
+
+                    n_very_heavy = 0
+                    l = []
+                    w = I.PENALTIES["very_heavy"]
+                    for (name, v) in penalties["very_heavy"].items():
+                        y = self.Value(v) # TODO
+                        if y != 0:
+                            n_very_heavy += y
+                            l.append(name)
+                    if not l:
+                        l.append("none")
+                    total_very_heavy = n_very_heavy * w
+                    print(f"VERY Heavy ({n_very_heavy}*{w}={total_very_heavy}): {', '.join(l)}")
+                    total += total_very_heavy
 
                     total_teachers = 0
                     print("Teachers:")
