@@ -105,6 +105,7 @@ class Input:
             "LH Newbies /3",
             "LH Beg /1",
             "LH Beg /2",
+            "LH Beg /3",
             "LH Beg/Int /1",
             "LH Beg/Int /2",
             "LH Beg/Int /3",
@@ -119,8 +120,10 @@ class Input:
             "Balboa Beg",
             "Balboa Int",
             "Collegiate Shag Beg",
-            "Collegiate Shag Int/Adv",
-            "Collegiate Shag Choreo",
+            "Collegiate Shag Int",
+            #"Collegiate Shag Choreo",
+            "Saint Louis Shag Beg",
+            "Saint Louis Shag Int",
             "Blues Beg",
             "Blues Int",
             "Airsteps 1",
@@ -300,7 +303,7 @@ class Input:
                 "Teaching 2 more courses than desired": "2more",
                 "Teaching 1 less course than desired": "1less",
                 "Not teaching at all": "not_teaching",
-                "Teaching during Teachers' Training": "tt",
+#                "Teaching during Teachers' Training": "tt",
                 "Not respecting an explicit wish from the last question": "special",
             }
             ic = {} # inconvenience data
@@ -1329,23 +1332,24 @@ class Model:
                     self.penalties["teacher"][T]["not_teaching"] = p_not_teaching
 
                     # teaching or not being available during Teachers Training
-                    w = icw["tt"]
-                    l = []
-                    for s in range(len(I.slots)):
-                        hit = model.NewBoolVar("")
-                        model.AddBoolAnd([tt_map[s], M.ps_na[(t,s)]]).OnlyEnforceIf(hit)
-                        model.AddBoolOr([tt_map[s].Not(), M.ps_na[(t,s)].Not()]).OnlyEnforceIf(hit.Not())
-                        l.append(hit)
-                    teaches_tt = model.NewBoolVar("")
-                    c = I.Courses["Teachers Training"]
-                    model.Add(M.tc[(t,c)] == 1).OnlyEnforceIf(teaches_tt)
-                    model.Add(M.tc[(t,c)] == 0).OnlyEnforceIf(teaches_tt.Not())
-                    teaches_tt_time = model.NewBoolVar("")
-                    model.Add(teaches_tt_time == sum(l)).OnlyEnforceIf(teaches_tt.Not())
-                    model.Add(teaches_tt_time == 0).OnlyEnforceIf(teaches_tt)
-                    p_tt = model.NewIntVar(0, w, "")
-                    model.Add(p_tt == teaches_tt_time * w)
-                    self.penalties["teacher"][T]["tt"] = p_tt
+                    if "tt" in icw:
+                        w = icw["tt"]
+                        l = []
+                        for s in range(len(I.slots)):
+                            hit = model.NewBoolVar("")
+                            model.AddBoolAnd([tt_map[s], M.ps_na[(t,s)]]).OnlyEnforceIf(hit)
+                            model.AddBoolOr([tt_map[s].Not(), M.ps_na[(t,s)].Not()]).OnlyEnforceIf(hit.Not())
+                            l.append(hit)
+                        teaches_tt = model.NewBoolVar("")
+                        c = I.Courses["Teachers Training"]
+                        model.Add(M.tc[(t,c)] == 1).OnlyEnforceIf(teaches_tt)
+                        model.Add(M.tc[(t,c)] == 0).OnlyEnforceIf(teaches_tt.Not())
+                        teaches_tt_time = model.NewBoolVar("")
+                        model.Add(teaches_tt_time == sum(l)).OnlyEnforceIf(teaches_tt.Not())
+                        model.Add(teaches_tt_time == 0).OnlyEnforceIf(teaches_tt)
+                        p_tt = model.NewIntVar(0, w, "")
+                        model.Add(p_tt == teaches_tt_time * w)
+                        self.penalties["teacher"][T]["tt"] = p_tt
 
                     # split
                     days_split = model.NewIntVar(0, len(I.days), "TDsplit:%i" % t)
@@ -1744,7 +1748,7 @@ class Model:
                                 else:
                                     Ts_print = f"{Ts[0]}"
                                 #print(f"{I.slots[s]: <11}{I.rooms[r]: <5}{'+'.join(Ts): <19}{I.courses[c]}")
-                                print(f"{I.slots[s]: <11}{I.rooms[r]: <4}{Ts_print: <21}{I.courses[c]}")
+                                print(f"  {I.slots[s]: <11}{I.rooms[r]: <4}{Ts_print: <21}{I.courses[c]}")
                 if penalties:
                     print("PENALTIES:")
                     total = 0
