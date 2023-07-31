@@ -92,8 +92,8 @@ class Input:
             "Shag/Balboa Open Training",
             #"Lindy/Charleston Open Training",
             "Teachers Training", # TODO
-            #"Rhythm Pilots /1",
-            #"Rhythm Pilots /2",
+            "Rhythm Pilots /1",
+            "Rhythm Pilots /2",
             "Blues/Slow Open Training",
             ]
         self.courses_solo = [
@@ -103,13 +103,16 @@ class Input:
             "LH Newbies /1",
             "LH Newbies /2",
             "LH Newbies /3",
+            "LH Newbies /EN",
             "LH Beg /1",
             "LH Beg /2",
             "LH Beg /3",
+            "LH Beg /4",
+            "LH Beg /5",
             "LH Beg/Int /1",
             "LH Beg/Int /2",
             "LH Beg/Int /3",
-#            "LH Beg/Int /4",
+            "LH Beg/Int /4",
 #            "LH Beg/Int /5",
 #            "LH Beg/Int /6",
 #            "LH Beg/Int /7",
@@ -464,8 +467,8 @@ class Input:
         if Cstud in self.COURSES_IGNORE:
             result = Cstud
         if not result:
-            result = Cstud
-            error(f"Unknown student course '{course}'")
+            result = "IGNORE"
+            warn(f"Unknown student course '{course}'")
         return result
 
     def read_students_input(self, csv_file):
@@ -518,6 +521,7 @@ class Input:
             if len(courses_attend) > 3:
                 warn(f"Student {name} wants more than 3 courses")
             courses_attend = [self.translate_course_cs_en(Ccs) for Ccs in courses_attend]
+            courses_attend = [C for C in courses_attend if C != "IGNORE"]
             d["courses_attend"] = []
             for C in courses_attend:
                 if C in self.COURSES_IGNORE:
@@ -700,11 +704,12 @@ class Input:
 #            # person-related
 #            "teach_together": 25,
 #            # overall schedule
-            "courses_closed": 50,
+            "courses_closed": 1, #50, # FIXME
 #            # serious penalties
 #            "everybody_teach": 50,
             # students
             "student": 24, # absolutely unhappy student
+            "nice": 50,
             "custom": 300,
             "heavy": 1000000,
             "very_heavy": 100000000,
@@ -1029,6 +1034,7 @@ class Model:
         self.penalties["heavy"] = {}
         self.penalties["very_heavy"] = {}
         self.penalties["custom"] = {}
+        self.penalties["nice"] = {}
 
         for T in I.teachers:
             debug(f"Teacher max: {T} {I.t_util_max.get(T,-1)}")
@@ -1044,13 +1050,6 @@ class Model:
         for C in I.courses_not_open:
             #model.Add(self.c_active[I.Courses[C]] == 0)
             self.add_heavy(f"notopen-{C}", self.c_active[I.Courses[C]] == 0)
-
-#        # community teachers that must teach
-#        for T in ["Zuzka", "Vojta-N.", "Míša-Š.", "Kuba-B."]:
-#            if I.t_util_max.get(T, 0) >= 1:
-#                model.Add(sum(self.tc[(I.Teachers[T],c)] for c in range(len(I.courses))) >= 1)
-#            else:
-#                warn(f"community teacher {T} should teach, but has no utilization preferences")
 
         if I.tc_strict:
             debug("strict assignments present")
@@ -1094,7 +1093,8 @@ class Model:
 
         for T1, T2 in set(I.tt_not_together):
             for c in range(len(I.courses)):
-                model.Add(sum(self.tc[(t,c)] for t in [I.Teachers[T1], I.Teachers[T2]]) < 2)
+                #model.Add(sum(self.tc[(t,c)] for t in [I.Teachers[T1], I.Teachers[T2]]) < 2)
+                self.add_heavy(f"tt_not/{T1}+{T2}/{I.courses[c]}".replace(" ", "-"), sum(self.tc[(t,c)] for t in [I.Teachers[T1], I.Teachers[T2]]) < 2)
 
         # TODO: this should be loosened, also wrt. attending
         # teacher T does not teach in two venues in the same day
@@ -1448,10 +1448,14 @@ class Model:
                         debug(f"stud_bad: skipping {S}, not a student")
                         continue
                     debug(f"stud_bad: student {S}")
+                    if not val["courses_attend"]:
+                        warn(f"stud_bad: skipping {S}, no courses_attend")
+                        continue
                     if "provided_id" in val:
                         debug(f"stud_bad: provided_id '{val['provided_id']}'")
                     else:
                         debug(f"stud_bad: no id provided")
+                    debug(f"courses_attend: {val['courses_attend']}")
                     course_weigth = 100 // len(val["courses_attend"])
 
                     courses_bad = []
@@ -1576,6 +1580,8 @@ class Model:
                 penalties_values.append(sum(d.values()) * I.PENALTIES["very_heavy"])
             elif top == "custom":
                 penalties_values.append(sum(d.values()) * I.PENALTIES["custom"])
+            elif top == "nice":
+                penalties_values.append(sum(d.values()) * I.PENALTIES["nice"])
             else:
                 error(f"Unknown penalty domain: {top}")
 
@@ -1594,6 +1600,9 @@ class Model:
 
     def add_custom(self, name, *args):
         self.add_rule("custom", name, *args)
+
+    def add_nice(self, name, *args):
+        self.add_rule("nice", name, *args)
 
     def add_rule(self, typ, name, *args):
         model = self.model
@@ -1614,10 +1623,10 @@ class Model:
 
         model.Add(*args).OnlyEnforceIf(p.Not())
 
-    def add_wish(self, teacher, *args):
+    def add_wish(self, T, *args):
         model = self.model
 
-        p = self.wish[teacher]
+        p = self.wish[T]
 
         model.Add(*args).OnlyEnforceIf(p.Not())
 
@@ -1783,6 +1792,7 @@ class Model:
 
                     total_teachers = 0
                     print("Teachers:")
+                    teachers_happy = []
                     # FIXME
                     for T, d in penalties["teacher"].items():
                         l = []
@@ -1798,6 +1808,8 @@ class Model:
                             print(f" * {T}: {s} // {details}")
                         else:
                             debug(f" * {T} is happy")
+                            teachers_happy.append(T)
+                    print(f" Happy teachers: ({len(teachers_happy)}) {', '.join(teachers_happy)}")
                     print(f"Teachers total: {total_teachers}")
                     total += total_teachers
 
@@ -1820,6 +1832,20 @@ class Model:
                     total_custom = n_custom * w
                     print(f"Custom ({n_custom}*{w}={total_custom}): {', '.join(l)}")
                     total += total_custom
+
+                    n_nice = 0
+                    l = []
+                    w = I.PENALTIES["nice"]
+                    for (name, v) in penalties["nice"].items():
+                        y = self.Value(v) # TODO
+                        if y != 0:
+                            n_nice += y
+                            l.append(name)
+                    if not l:
+                        l.append("none")
+                    total_nice = n_nice * w
+                    print(f"Nice: ({n_nice}*{w}={total_nice}): {', '.join(l)}")
+                    total += total_nice
 
                     print("Students:")
                     total_students = 0
