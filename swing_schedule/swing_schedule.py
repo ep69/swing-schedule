@@ -3,9 +3,10 @@
 import sys
 import csv
 import argparse
-from ortools.sat.python import cp_model
 import pprint
 import regex
+
+from ortools.sat.python import cp_model
 
 VERBOSE = False
 
@@ -120,15 +121,19 @@ class Input:
             "LH Int /2",
             "LH Int/Adv",
             "LH Adv",
+            "LH - theme course",
             "Balboa Beg",
             "Balboa Int",
+            "Balboa - theme course",
             "Collegiate Shag Beg",
             "Collegiate Shag Int",
+            "Collegiate Shag - theme course",
             #"Collegiate Shag Choreo",
             "Saint Louis Shag Beg",
             "Saint Louis Shag Int",
             "Blues Beg",
             "Blues Int",
+            "Blues - theme course",
             "Airsteps 1",
             "Airsteps 2",
             ]
@@ -193,6 +198,12 @@ class Input:
         return result
 
     def is_course_type(self, Cspecn, Cgen):
+        # ugly hack for theme courses
+        if (Cspecn.startswith("Balboa - theme course") and Cgen.startswith("Balboa Int")) \
+                or (Cspecn.startswith("Collegiate Shag - theme course") and Cgen.startswith("Collegiate Shag Int")) \
+                or (Cspecn.startswith("Blues - theme course") and Cgen.startswith("Blues Int")):
+            return True
+
         courses_with_subprefix = [
             "LH Beg",
             "LH Int",
@@ -264,7 +275,7 @@ class Input:
             debug(f"Reading: name {name}")
             if name in result:
                 warn(f"Re-reading answers for {name}")
-                del(result[name])
+                del result[name]
 #            # check that we know the teacher
 #            found = False
 #            for T,_ in self.TEACHERS:
@@ -279,6 +290,10 @@ class Input:
             d["ncourses_ideal"] = int(row["How many courses would you ideally like to teach?"])
             d["ncourses_max"] = int(row["How many courses are you able to teach at most?"])
             d["ndays_max"] = int(row["How many days are you able to teach at most?"])
+            if d["ndays_max"] == 0 or d["ncourses_max"] == 0:
+                # skip
+                info(f"Skipping {who} - does not want to teach courses")
+                continue
             if row["Are you fine with teaching in English?"] == "Yes":
                 d["english"] = True
             else:
