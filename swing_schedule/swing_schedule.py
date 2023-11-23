@@ -105,22 +105,22 @@ class Input:
             "LH Newbies /2",
             "LH Newbies /3",
             "LH Newbies /EN",
-            "LH Beg /1",
-            "LH Beg /2",
-            "LH Beg /3",
+            "LH Beg /LikeItIs",
+            "LH Beg /NoName",
+            "LH Beg /ASmoothOne",
             "LH Beg /4",
             "LH Beg /5",
-            "LH Beg/Int /1",
-            "LH Beg/Int /2",
+            "LH Beg/Int /BasieBeat",
+            "LH Beg/Int /TheFox",
             "LH Beg/Int /3",
             "LH Beg/Int /4",
 #            "LH Beg/Int /5",
 #            "LH Beg/Int /6",
 #            "LH Beg/Int /7",
-            "LH Int /1",
-            "LH Int /2",
-            "LH Int/Adv",
-            "LH Adv",
+            "LH Int /Perdido",
+            "LH Int /NoName",
+            "LH Int/Adv /NoName",
+            "LH Adv /HotSoup",
             "LH - theme course",
             "Balboa Beg",
             "Balboa Int",
@@ -209,7 +209,7 @@ class Input:
             "LH Int",
             "Collegiate Shag Int",
         ]
-        Cspec = regex.sub(" /\d+$", "", Cspecn)
+        Cspec = regex.sub(" /[A-Za-z]+$", "", Cspecn)
         result = None
         if Cspec.endswith("English"):
             result = Cgen == Cspec
