@@ -98,7 +98,8 @@ class Input:
             "Blues/Slow Open Training",
             ]
         self.courses_solo = [
-            "Solo",
+            "Solo Beg",
+            "Solo Int",
             ]
         self.courses_regular = [
             "LH Newbies /1",
@@ -106,11 +107,10 @@ class Input:
             "LH Newbies /3",
             "LH Newbies /EN",
             "LH Beg /LikeItIs",
+            "LH Beg /Sandu",
+            "LH Beg /JiveAtFive",
             "LH Beg /NoName",
-            "LH Beg /ASmoothOne",
-            "LH Beg /4",
-            "LH Beg /5",
-            "LH Beg/Int /BasieBeat",
+            "LH Beg/Int /SmoothOne",
             "LH Beg/Int /TheFox",
             "LH Beg/Int /3",
             "LH Beg/Int /4",
@@ -122,22 +122,30 @@ class Input:
             "LH Int/Adv /NoName",
             "LH Adv /HotSoup",
             "LH - theme course",
+            "Choreo - LH",
             "Balboa Beg",
+            "Balboa Beg/Int",
             "Balboa Int",
             "Balboa - theme course",
             "Collegiate Shag Beg",
+            "Collegiate Shag Beg/Int",
             "Collegiate Shag Int",
             "Collegiate Shag - theme course",
             #"Collegiate Shag Choreo",
             "Saint Louis Shag Beg",
+            "Saint Louis Shag Beg/Int",
             "Saint Louis Shag Int",
             "Blues Beg",
             "Blues Int",
+            "Choreo - blues",
             "Blues - theme course",
             "Airsteps 1",
             "Airsteps 2",
             ]
         self.COURSES_IGNORE = [
+            "Choreo - balboa", #FIXME
+            "Choreo - shag", #FIXME
+            "Choreo - solo", #FIXME
             "Charleston 1.5",
             "Zumba s Tomem",
         ]
@@ -207,7 +215,10 @@ class Input:
         courses_with_subprefix = [
             "LH Beg",
             "LH Int",
+            "Collegiate Shag Beg",
             "Collegiate Shag Int",
+            "Balboa Beg",
+            "Saint Louis Shag Beg",
         ]
         Cspec = regex.sub(" /[A-Za-z]+$", "", Cspecn)
         result = None
