@@ -91,7 +91,7 @@ class Input:
 
         self.courses_open = [
             "Shag/Balboa Open Training",
-            #"Lindy/Charleston Open Training",
+            "Lindy/Charleston Open Training",
             "Teachers Training", # TODO
             "Rhythm Pilots /1",
             "Rhythm Pilots /2",
@@ -119,10 +119,10 @@ class Input:
 #            "LH Beg/Int /7",
             "LH Int /Perdido",
             "LH Int /NoName",
-            "LH Int/Adv /NoName",
+            "LH Int /Charleston-6T",
+            "LH Int/Adv /Splanky",
             "LH Adv /HotSoup",
             "LH - theme course",
-            "Choreo - LH",
             "Balboa Beg",
             "Balboa Beg/Int",
             "Balboa Int",
@@ -131,18 +131,19 @@ class Input:
             "Collegiate Shag Beg/Int",
             "Collegiate Shag Int",
             "Collegiate Shag - theme course",
-            #"Collegiate Shag Choreo",
             "Saint Louis Shag Beg",
             "Saint Louis Shag Beg/Int",
             "Saint Louis Shag Int",
             "Blues Beg",
             "Blues Int",
-            "Choreo - blues",
             "Blues - theme course",
             "Airsteps 1",
             "Airsteps 2",
             ]
         self.COURSES_IGNORE = [
+            "Choreo - LH",
+            #"Collegiate Shag Choreo",
+            "Choreo - blues",
             "Choreo - balboa", #FIXME
             "Choreo - shag", #FIXME
             "Choreo - solo", #FIXME
