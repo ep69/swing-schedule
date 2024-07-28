@@ -221,7 +221,7 @@ class Input:
             "Balboa Beg",
             "Saint Louis Shag Beg",
         ]
-        Cspec = regex.sub(" /[A-Za-z]+$", "", Cspecn)
+        Cspec = regex.sub(" /[A-Za-z0-9-]+$", "", Cspecn)
         result = None
         if Cspec.endswith("English"):
             result = Cgen == Cspec
