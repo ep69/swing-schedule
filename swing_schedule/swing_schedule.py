@@ -100,6 +100,7 @@ class Input:
         self.courses_solo = [
             "Solo Beg",
             "Solo Int",
+            "Solo Blues",
             ]
         self.courses_regular = [
             "LH Newbies /1",
@@ -127,6 +128,7 @@ class Input:
             "Balboa Beg/Int",
             "Balboa Int",
             "Balboa - theme course",
+            "Slow Balboa (2nd half)",
             "Collegiate Shag Beg",
             "Collegiate Shag Beg/Int",
             "Collegiate Shag Int",
