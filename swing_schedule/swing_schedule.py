@@ -98,28 +98,30 @@ class Input:
             "Blues/Slow Open Training",
             ]
         self.courses_solo = [
+            "Solo",
             "Solo Beg",
             "Solo Int",
-            "Solo Blues",
             ]
         self.courses_regular = [
             "LH Newbies /1",
             "LH Newbies /2",
             "LH Newbies /3",
             "LH Newbies /EN",
+            "LH Beg /1",
+            "LH Beg /2",
             "LH Beg /LikeItIs",
-            "LH Beg /Sandu",
-            "LH Beg /JiveAtFive",
             "LH Beg /NoName",
-            "LH Beg/Int /SmoothOne",
+            "LH Beg/Int /JiveAtFive",
+            "LH Beg/Int /Sandu",
+            "LH Beg/Int /TickleToe",
             "LH Beg/Int /TheFox",
-            "LH Beg/Int /3",
             "LH Beg/Int /4",
 #            "LH Beg/Int /5",
 #            "LH Beg/Int /6",
 #            "LH Beg/Int /7",
+            "LH Int /SmoothOne",
             "LH Int /Perdido",
-            "LH Int /NoName",
+            "LH Int /BasieBeat",
             "LH Int /Charleston-6T",
             "LH Int/Adv /Splanky",
             "LH Adv /HotSoup",
@@ -130,7 +132,8 @@ class Input:
             "Balboa - theme course",
             "Slow Balboa (2nd half)",
             "Collegiate Shag Beg",
-            "Collegiate Shag Beg/Int",
+            "Collegiate Shag Beg/Int /1",
+            "Collegiate Shag Beg/Int /2",
             "Collegiate Shag Int",
             "Collegiate Shag - theme course",
             "Saint Louis Shag Beg",
@@ -138,6 +141,7 @@ class Input:
             "Saint Louis Shag Int",
             "Blues Beg",
             "Blues Int",
+            "Blues Solo",
             "Blues - theme course",
             "Airsteps 1",
             "Airsteps 2",
@@ -212,7 +216,9 @@ class Input:
         # ugly hack for theme courses
         if (Cspecn.startswith("Balboa - theme course") and Cgen.startswith("Balboa Int")) \
                 or (Cspecn.startswith("Collegiate Shag - theme course") and Cgen.startswith("Collegiate Shag Int")) \
-                or (Cspecn.startswith("Blues - theme course") and Cgen.startswith("Blues Int")):
+                or (Cspecn.startswith("Blues - theme course") and Cgen.startswith("Blues Int")) \
+                or (Cspecn.startswith("Blues Solo") and Cgen.startswith("Blues Int")) \
+                or False:
             return True
 
         courses_with_subprefix = [
