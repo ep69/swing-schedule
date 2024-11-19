@@ -92,68 +92,51 @@ class Input:
         self.courses_open = [
             "Shag/Balboa Open Training",
             "Lindy/Charleston Open Training",
-            "Teachers Training", # TODO
+            #"Teachers Training", # TODO
             "Rhythm Pilots /1",
             "Rhythm Pilots /2",
-            "Blues/Slow Open Training",
+            #"Blues/Slow Open Training",
             ]
         self.courses_solo = [
-            "Solo",
-            "Solo Beg",
             "Solo Int",
             ]
         self.courses_regular = [
             "LH Newbies /1",
             "LH Newbies /2",
             "LH Newbies /3",
-            "LH Newbies /EN",
+
             "LH Beg /1",
             "LH Beg /2",
-            "LH Beg /LikeItIs",
-            "LH Beg /NoName",
+
             "LH Beg/Int /JiveAtFive",
             "LH Beg/Int /Sandu",
-            "LH Beg/Int /TickleToe",
-            "LH Beg/Int /TheFox",
-            "LH Beg/Int /4",
-#            "LH Beg/Int /5",
-#            "LH Beg/Int /6",
-#            "LH Beg/Int /7",
+
             "LH Int /SmoothOne",
             "LH Int /Perdido",
             "LH Int /BasieBeat",
-            "LH Int /Charleston-6T",
+
             "LH Int/Adv /Splanky",
-            "LH Adv /HotSoup",
-            "LH - theme course",
-            "Balboa Beg",
-            "Balboa Beg/Int",
-            "Balboa Int",
-            "Balboa - theme course",
-            "Slow Balboa (2nd half)",
+
+            "Airsteps 1",
+
             "Collegiate Shag Beg",
-            "Collegiate Shag Beg/Int /1",
-            "Collegiate Shag Beg/Int /2",
+            "Collegiate Shag Beg/Int",
             "Collegiate Shag Int",
-            "Collegiate Shag - theme course",
+
+            "Balboa Beg",
+            "Balboa Int - Musicality (1st half)",
+
+            "Blues Solo",
+            ]
+        self.COURSES_IGNORE = [
+            "LH Adv",
+            "Solo Beg",
+            "Blues Beg",
+            "Slow Balboa (2nd half)",
             "Saint Louis Shag Beg",
             "Saint Louis Shag Beg/Int",
             "Saint Louis Shag Int",
-            "Blues Beg",
-            "Blues Int",
-            "Blues Solo",
-            "Blues - theme course",
-            "Airsteps 1",
-            "Airsteps 2",
-            ]
-        self.COURSES_IGNORE = [
-            "Choreo - LH",
-            #"Collegiate Shag Choreo",
-            "Choreo - blues",
-            "Choreo - balboa", #FIXME
-            "Choreo - shag", #FIXME
-            "Choreo - solo", #FIXME
-            "Charleston 1.5",
+
             "Zumba s Tomem",
         ]
         for C, d in self.courses_extra.items():
@@ -1262,14 +1245,6 @@ class Model:
                 self.penalties["teacher"] = {}
                 total_teacher = coeff
 
-                tt_map = []
-                c = I.Courses["Teachers Training"]
-                for s in range(len(I.slots)):
-                    hit = model.NewBoolVar("")
-                    model.Add(M.cs[c] == s).OnlyEnforceIf(hit)
-                    model.Add(M.cs[c] != s).OnlyEnforceIf(hit.Not())
-                    tt_map.append(hit)
-
                 for T in I.Teachers:
                     t = I.Teachers[T]
                     self.penalties["teacher"][T] = {}
@@ -1367,7 +1342,15 @@ class Model:
                     self.penalties["teacher"][T]["not_teaching"] = p_not_teaching
 
                     # teaching or not being available during Teachers Training
-                    if "tt" in icw:
+                    if "Teachers Training" in I.Courses and "tt" in icw:
+                        tt_map = []
+                        c = I.Courses["Teachers Training"]
+                        for s in range(len(I.slots)):
+                            hit = model.NewBoolVar("")
+                            model.Add(M.cs[c] == s).OnlyEnforceIf(hit)
+                            model.Add(M.cs[c] != s).OnlyEnforceIf(hit.Not())
+                            tt_map.append(hit)
+
                         w = icw["tt"]
                         l = []
                         for s in range(len(I.slots)):
