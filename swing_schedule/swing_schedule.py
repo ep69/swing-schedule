@@ -105,8 +105,9 @@ class Input:
             "LH Newbies /2",
             "LH Newbies /3",
 
-            "LH Beg /1",
-            "LH Beg /2",
+            "LH Beg /BottomsUp",
+            "LH Beg /SureThing",
+            "LH Beg /New",
 
             "LH Beg/Int /JiveAtFive",
             "LH Beg/Int /Sandu",
@@ -114,8 +115,11 @@ class Input:
             "LH Int /SmoothOne",
             "LH Int /Perdido",
             "LH Int /BasieBeat",
+            "LH Int /6weeks",
 
-            "LH Int/Adv /Splanky",
+            "LH Int/Adv",
+
+            "LH Adv",
 
             "Airsteps 1",
 
@@ -124,14 +128,15 @@ class Input:
             "Collegiate Shag Int",
 
             "Balboa Beg",
-            "Balboa Int - Musicality (1st half)",
+            "Balboa Beg/Int",
+            "Balboa Int",
 
+            "Blues Beg",
+            "Blues Int",
             "Blues Solo",
             ]
         self.COURSES_IGNORE = [
-            "LH Adv",
             "Solo Beg",
-            "Blues Beg",
             "Slow Balboa (2nd half)",
             "Saint Louis Shag Beg",
             "Saint Louis Shag Beg/Int",
@@ -227,8 +232,9 @@ class Input:
         for Cspec in self.courses:
             if self.is_course_type(Cspec, course):
                 #debug(f"check_course: course preference {course} maps, e.g to {Cspec}")
-                return
-        error(f"check_course: unknown course: '{course}'")
+                return True
+        warn(f"check_course: unknown course: '{course}'") # TODO
+        return False
 
     def read_teachers_input(self, infile=None, extra_courses=[], excluded_teachers=[]):
         debug(f"read_teachers_input: Excluded teachers: {', '.join(excluded_teachers)}")
@@ -255,9 +261,8 @@ class Input:
                         course = col.split("[")[1].split("]")[0]
                         if course in self.COURSES_IGNORE:
                             continue
-                        self.check_course(course)
-                        # problematic: Balboa Beginners 2
-                        input_courses.append(course)
+                        if self.check_course(course):
+                            input_courses.append(course)
                 for C in extra_courses:
                     if C not in input_courses:
                         input_courses.append(C)
@@ -543,9 +548,10 @@ class Input:
             d["courses_attend"] = []
             for C in courses_attend:
                 if C in self.COURSES_IGNORE:
-                    debug(f"read_students_input: ignoring course {C}")
+                    debug(f"read_students_input: ignoring course explicitly {C}")
+                elif not self.check_course(C):
+                    debug(f"read_students_input: ignoring course implicitly {C}")
                 else:
-                    self.check_course(C)
                     d["courses_attend"].append(C)
             debug(f"read_students_input: courses_attend: {d['courses_attend']}")
             result[name] = d
@@ -591,8 +597,6 @@ class Input:
         # course C must take place in room R
         # PJ in Mosilana
         self.cr_strict = {}
-        # teacher T must teach courses Cs
-        self.tc_strict = {}
         # course Cx that must open
         self.courses_must_open = []
         # course Cx that must not open
@@ -1060,25 +1064,12 @@ class Model:
             self.add_heavy(f"{T}-ncourses", sum(self.tc[(I.Teachers[T],c)] for c in range(len(I.courses))) <= I.t_util_max.get(T, 0))
             self.add_heavy(f"{T}-ndays", sum(self.td[(I.Teachers[T],d)] for d in range(len(I.days))) <= I.t_days_max.get(T, 0))
 
-        debug(f"Courses that must open: {', '.join(I.courses_must_open)}")
+        warn(f"Courses that must open: {', '.join(I.courses_must_open)}")
         for C in I.courses_must_open:
-            #model.Add(self.c_active[I.Courses[C]] == 1)
             self.add_heavy(f"mustopen-{C}", self.c_active[I.Courses[C]] == 1)
 
         for C in I.courses_not_open:
-            #model.Add(self.c_active[I.Courses[C]] == 0)
             self.add_heavy(f"notopen-{C}", self.c_active[I.Courses[C]] == 0)
-
-        if I.tc_strict:
-            debug("strict assignments present")
-            strict_assignments = []
-            for (T, Cs) in I.tc_strict.items():
-                t = I.Teachers[T]
-                for C in Cs:
-                    c = I.Courses[C]
-                    #strict_assignments.append(self.tc[(t,c)])
-                    model.Add(self.tc[(t,c)] == 1).OnlyEnforceIf(self.c_active[c])
-            #model.AddBoolAnd(strict_assignments)
 
         teachers_all = set(range(len(I.teachers)))
         for (C, Ts) in I.ct_possible.items():
@@ -1625,7 +1616,8 @@ class Model:
     def add_rule(self, typ, name, *args):
         model = self.model
 
-        debug(f"Adding rule type '{typ}' name '{name}' args '{args}'")
+        #debug(f"Adding rule type '{typ}' name '{name}' args '{args}'")
+        debug(f"Adding rule type '{typ}' name '{name}'")
         debug(f"Current penalties of type '{typ}': {self.penalties[typ]}")
         if not name:
             # TODO probably not possible..
