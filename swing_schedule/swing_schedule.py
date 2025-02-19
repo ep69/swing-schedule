@@ -103,7 +103,7 @@ class Input:
         self.courses_regular = [
             "LH Newbies /1",
             "LH Newbies /2",
-            "LH Newbies /3",
+            #"LH Newbies /3",
 
             "LH Beg /BottomsUp",
             "LH Beg /SureThing",
@@ -114,24 +114,24 @@ class Input:
 
             "LH Int /SmoothOne",
             "LH Int /Perdido",
-            "LH Int /BasieBeat",
+            #"LH Int /BasieBeat",
             "LH Int /6weeks",
 
             "LH Int/Adv",
 
             "LH Adv",
 
-            "Airsteps 1",
+            #"Airsteps 1",
 
             "Collegiate Shag Beg",
             "Collegiate Shag Beg/Int",
             "Collegiate Shag Int",
 
-            "Balboa Beg",
+            #"Balboa Beg",
             "Balboa Beg/Int",
             "Balboa Int",
 
-            "Blues Beg",
+            #"Blues Beg",
             "Blues Int",
             "Blues Solo",
             ]
@@ -688,13 +688,13 @@ class Input:
                     if d in self.input_data:
                         self.tt_not_together.append((T, d))
                     else:
-                        warn(f"Inactive teacher {d} (tt_not_together), ignoring")
+                        info(f"Inactive teacher {d} (tt_not_together), ignoring")
                 l = []
                 for d in data["teach_together"]:
                     if d in self.input_data:
                         l.append(d)
                     else:
-                        warn(f"Inactive teacher {d} (tt_together), ignoring")
+                        info(f"Inactive teacher {d} (tt_together), ignoring")
                 self.tt_together[T] = l
             self.ts_pref[T] = data["slots"]
             assert(len(self.ts_pref[T]) == len(self.slots))
@@ -732,7 +732,7 @@ class Input:
             # students
             "student": 24, # absolutely unhappy student
             "nice": 50,
-            "custom": 300,
+            "custom": 400,
             "heavy": 1000000,
             "very_heavy": 100000000,
             "teacher": 1000,
@@ -1064,7 +1064,7 @@ class Model:
             self.add_heavy(f"{T}-ncourses", sum(self.tc[(I.Teachers[T],c)] for c in range(len(I.courses))) <= I.t_util_max.get(T, 0))
             self.add_heavy(f"{T}-ndays", sum(self.td[(I.Teachers[T],d)] for d in range(len(I.days))) <= I.t_days_max.get(T, 0))
 
-        warn(f"Courses that must open: {', '.join(I.courses_must_open)}")
+        info(f"Courses that must open: {', '.join(I.courses_must_open)}")
         for C in I.courses_must_open:
             self.add_heavy(f"mustopen-{C}", self.c_active[I.Courses[C]] == 1)
 
@@ -1425,14 +1425,14 @@ class Model:
                     model.Add(sum(success_list) == 0).OnlyEnforceIf(nobody)
                     model.Add(sum(success_list) >= 1).OnlyEnforceIf(nobody.Not())
                     if not I.tt_together[T]:
-                        warn(f"teach_together: no preference => no penalty for {T}") # TODO
+                        debug(f"teach_together: no preference => no penalty for {T}") # TODO
                     p_no_person = model.NewIntVar(0, icw["no_person"], "")
                     model.Add(p_no_person == icw["no_person"] * nobody)
                     self.penalties["teacher"][T]["no_person"] = p_no_person
 
                     # special
                     if icw["special"]:
-                        warn(f"Special wish for {T}")
+                        debug(f"Special wish for {T}")
                         p_special = model.NewIntVar(0, icw["special"], "")
                         model.Add(p_special == icw["special"] * self.wish[T])
                         self.penalties["teacher"][T]["special"] = p_special
