@@ -30,7 +30,7 @@ def error(m):
     sys.exit(1)
 
 def stop():
-    print(f"STOP ... Execution halted for debugging purposes")
+    print("STOP ... Execution halted for debugging purposes")
     sys.exit(100)
 
 class Input:
@@ -459,7 +459,7 @@ class Input:
         self.input_data = teachers_data
 
     def init_students_form(self, infile):
-        debug(f"Reading students' preferences")
+        debug("Reading students' preferences")
         students_data = self.read_students_input(infile)
         debug("STUDENTS' ANSWERS:")
         debug(pprint.pformat(students_data))
@@ -527,14 +527,14 @@ class Input:
             debug(f"Slots: {''.join(str(s) for s in slots)}")
             d["slots"] = slots
 
-            answer = row[f"V jaké roli si zapisuješ kurzy?"]
+            answer = row["V jaké roli si zapisuješ kurzy?"]
             if answer in ("Lead", "Follow"):
                 d["role"] = answer.lower()
             else:
                 warn(f"Ignoring non-standard role '{answer}'")
                 continue
 
-            answer = row[f"Jaké kurzy si chceš zapsat?"]
+            answer = row["Jaké kurzy si chceš zapsat?"]
             courses_attend = [c.strip() for c in answer.split(",") if c]
             debug(f"Chosen courses: '{','.join(courses_attend)}'")
             if not courses_attend:
@@ -1128,7 +1128,7 @@ class Model:
         # same courses should not happen in same days and also not in same times
         # it should probably not be a strict limitation, but it is much easier to write
         # TODO could be turned into heavy penalty, but probably later in the process (after init_penalties)
-        debug(f"courses_different")
+        debug("courses_different")
         for Cs in I.courses_different:
             debug(f"courses_different: Cs: {Cs}")
             daylist = [] # days
@@ -1137,7 +1137,7 @@ class Model:
             #assert(2 <= len(Cs) <= min(len(I.days), len(I.times)))
             assert(2 <= len(Cs))
             if len(Cs) > 3:
-                error(f"courses_different does not work for more than 3 courses, to be fixed")
+                error("courses_different does not work for more than 3 courses, to be fixed")
             for C in Cs:
                 c = I.Courses[C]
                 debug(f"courses_different: C: {C} ({c})")
@@ -1215,7 +1215,7 @@ class Model:
 
 
     def init_penalties(self):
-        debug(f"Model: init_penalties")
+        debug("Model: init_penalties")
         I = self.I
         M = self
         model = self.model
@@ -1463,7 +1463,7 @@ class Model:
                     if "provided_id" in val:
                         debug(f"stud_bad: provided_id '{val['provided_id']}'")
                     else:
-                        debug(f"stud_bad: no id provided")
+                        debug("stud_bad: no id provided")
                     debug(f"courses_attend: {val['courses_attend']}")
                     course_weigth = 100 // len(val["courses_attend"])
 
@@ -1559,7 +1559,7 @@ class Model:
         #self.penalties = penalties
         self.penalties_analysis = penalties_analysis
 
-        debug(f"Model: penalties initialized")
+        debug("Model: penalties initialized")
 
     # finalize penalties
     def final_penalties(self):
@@ -1596,7 +1596,7 @@ class Model:
 
         model.Minimize(sum(penalties_values))
 
-        debug(f"Model: penalties finalized")
+        debug("Model: penalties finalized")
 
     def print_stats(self):
         print(self.model.ModelStats())
@@ -1705,7 +1705,7 @@ class Model:
 #                    else:
 #                        m += "0"
 #                debug(m)
-            debug(f"Courses openness and indices")
+            debug("Courses openness and indices")
             R.c_active = []
             R.cs = []
             for c in range(len(I.courses)):
