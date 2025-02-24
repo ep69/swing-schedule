@@ -153,12 +153,11 @@ class Input:
         for C, d in self.courses_extra.items():
             debug(f"init_constants: extra course {C}")
             typ = d["type"]
-            teachers = d["teachers"]
             if typ == "open":
                 self.courses_open.append(C)
             elif typ == "solo":
                 self.courses_solo.append(C)
-            elif typ == regular:
+            elif typ == "regular":
                 self.courses_regular.append(C)
             else:
                 error(f"init_constants: unknown extra course {C} type {typ}")
@@ -438,7 +437,6 @@ class Input:
                 else:
                     courses_teach_primary[C] = 0
             d["courses_teach_primary"] = courses_teach_primary
-            courses_teach_secondary = []
             d["courses_teach_secondary"] = [
                 c.strip()
                 for c in row[
@@ -773,13 +771,13 @@ class Input:
                         self.tt_not_together.append((T, d))
                     else:
                         info(f"Inactive teacher {d} (tt_not_together), ignoring")
-                l = []
+                ls = []
                 for d in data["teach_together"]:
                     if d in self.input_data:
-                        l.append(d)
+                        ls.append(d)
                     else:
                         info(f"Inactive teacher {d} (tt_together), ignoring")
-                self.tt_together[T] = l
+                self.tt_together[T] = ls
             self.ts_pref[T] = data["slots"]
             assert len(self.ts_pref[T]) == len(self.slots)
         debug("CT_POSSIBLE:")
@@ -838,147 +836,146 @@ class Result:
 
 
 class Model:
-    def init(self, I):
-        self.I = I
-        M = self
+    def init(self, In):
+        self.In = In
 
         model = cp_model.CpModel()
         self.model = model
 
         # course C takes place in slot S in room R
         self.src = {}
-        for s in range(len(I.slots)):
-            for r in range(len(I.rooms)):
-                for c in range(len(I.courses)):
+        for s in range(len(In.slots)):
+            for r in range(len(In.rooms)):
+                for c in range(len(In.courses)):
                     self.src[(s, r, c)] = model.NewBoolVar("CSR:s%ir%ic%i" % (s, r, c))
         # course C is taught by teacher T
         self.tc = {}
-        for c in range(len(I.courses)):
-            for t in range(len(I.teachers)):
+        for c in range(len(In.courses)):
+            for t in range(len(In.teachers)):
                 self.tc[(t, c)] = model.NewBoolVar("CT:t%ic%i" % (t, c))
         # course C is taught by teacher T as a leader
         self.tc_lead = {}
-        for c in range(len(I.courses)):
-            for t in range(len(I.teachers)):
+        for c in range(len(In.courses)):
+            for t in range(len(In.teachers)):
                 self.tc_lead[(t, c)] = model.NewBoolVar("")
         # course C is taught by teacher T as a follow
         self.tc_follow = {}
-        for c in range(len(I.courses)):
-            for t in range(len(I.teachers)):
+        for c in range(len(In.courses)):
+            for t in range(len(In.teachers)):
                 self.tc_follow[(t, c)] = model.NewBoolVar("")
         # teacher T teaches in slot S course C
         self.tsc = {}
-        for s in range(len(I.slots)):
-            for t in range(len(I.teachers)):
-                for c in range(len(I.courses)):
+        for s in range(len(In.slots)):
+            for t in range(len(In.teachers)):
+                for c in range(len(In.courses)):
                     self.tsc[(t, s, c)] = model.NewBoolVar("TS:t%is%ic%i" % (t, s, c))
         # teacher T teaches in slot S
         self.ts = {}
-        for s in range(len(I.slots)):
-            for t in range(len(I.teachers)):
+        for s in range(len(In.slots)):
+            for t in range(len(In.teachers)):
                 self.ts[(t, s)] = model.NewBoolVar("TS:t%is%i" % (t, s))
         # person P attends course C
         self.ac = {}
-        for p in range(len(I.teachers)):  # TODO people vs. teachers
-            for c in range(len(I.courses)):
+        for p in range(len(In.teachers)):  # TODO people vs. teachers
+            for c in range(len(In.courses)):
                 self.ac[(p, c)] = model.NewBoolVar("")
         # person P teaches or attends course C
         self.pc = {}
-        for p in range(len(I.teachers)):  # TODO people vs. teachers
-            for c in range(len(I.courses)):
+        for p in range(len(In.teachers)):  # TODO people vs. teachers
+            for c in range(len(In.courses)):
                 self.pc[(p, c)] = model.NewBoolVar("")
         # person P attends or teaches course C in slot S
         self.psc = {}
-        for p in range(len(I.teachers)):  # TODO people vs. teachers
-            for s in range(len(I.slots)):
-                for c in range(len(I.courses)):
+        for p in range(len(In.teachers)):  # TODO people vs. teachers
+            for s in range(len(In.slots)):
+                for c in range(len(In.courses)):
                     self.psc[(p, s, c)] = model.NewBoolVar("")
         # person P attends or teaches in slot S
         self.ps = {}
-        for s in range(len(I.slots)):
-            for p in range(len(I.teachers)):  # TODO people vs. teachers
+        for s in range(len(In.slots)):
+            for p in range(len(In.teachers)):  # TODO people vs. teachers
                 self.ps[(p, s)] = model.NewBoolVar("PS:p%is%i" % (p, s))
         # person P occupied according to slot preferences in slot S
         self.ps_occupied = {}
-        for s in range(len(I.slots)):
-            for p in range(len(I.teachers)):  # TODO people vs. teachers
+        for s in range(len(In.slots)):
+            for p in range(len(In.teachers)):  # TODO people vs. teachers
                 self.ps_occupied[(p, s)] = model.NewBoolVar("PS:p%is%i" % (p, s))
         # person P not available (teaches or bad slot preferences) in slot S
         self.ps_na = {}
-        for s in range(len(I.slots)):
-            for p in range(len(I.teachers)):  # TODO people vs. teachers
+        for s in range(len(In.slots)):
+            for p in range(len(In.teachers)):  # TODO people vs. teachers
                 self.ps_na[(p, s)] = model.NewBoolVar("PS:p%is%i" % (p, s))
         # teacher T teaches on day D
         self.td = {}
-        for d in range(len(I.days)):
-            for t in range(len(I.teachers)):
+        for d in range(len(In.days)):
+            for t in range(len(In.teachers)):
                 self.td[(t, d)] = model.NewBoolVar("TD:t%id%i" % (t, d))
         # person P is occupied (teaches or attends courses) on day D
         self.pd = {}
-        for d in range(len(I.days)):
-            for p in range(len(I.teachers)):  # TODO people vs. teachers
+        for d in range(len(In.days)):
+            for p in range(len(In.teachers)):  # TODO people vs. teachers
                 self.pd[(p, d)] = model.NewBoolVar("")
         # course C takes place in slot S
         self.cs = []
-        for c in range(len(I.courses)):
-            self.cs.append(model.NewIntVar(-1, len(I.slots) - 1, ""))
+        for c in range(len(In.courses)):
+            self.cs.append(model.NewIntVar(-1, len(In.slots) - 1, ""))
         # room R is in venue V
         self.rv = []
-        for r in range(len(I.rooms)):
-            self.rv.append(model.NewIntVar(0, len(I.venues) - 1, ""))
-            model.Add(self.rv[r] == I.Venues[I.rooms_venues[I.rooms[r]]])
+        for r in range(len(In.rooms)):
+            self.rv.append(model.NewIntVar(0, len(In.venues) - 1, ""))
+            model.Add(self.rv[r] == In.Venues[In.rooms_venues[In.rooms[r]]])
         # teacher T teaches in slot S course C in venue V
         self.tscv = {}
-        for t in range(len(I.teachers)):
-            for s in range(len(I.slots)):
-                for c in range(len(I.courses)):
-                    for v in range(len(I.venues)):
+        for t in range(len(In.teachers)):
+            for s in range(len(In.slots)):
+                for c in range(len(In.courses)):
+                    for v in range(len(In.venues)):
                         self.tscv[(t, s, c, v)] = model.NewBoolVar("")
         # course C is active
         self.c_active = []
-        for c in range(len(I.courses)):
+        for c in range(len(In.courses)):
             self.c_active.append(model.NewBoolVar(""))
 
         # teacher T teaches in venue V on day D
         # TODO do it wrt. attending courses - cannot teach in Koliste, attend in Mosilana, and teach again in Koliste
         self.tdv = {}
-        for t in range(len(I.teachers)):
-            for d in range(len(I.days)):
-                for v in range(len(I.venues)):
+        for t in range(len(In.teachers)):
+            for d in range(len(In.days)):
+                for v in range(len(In.venues)):
                     self.tdv[(t, d, v)] = model.NewBoolVar("")
 
         # teacher T teaches course C in slot S iff course C takes place at slot S and is taught by teacher T
         # inferring CTS info
-        for s in range(len(I.slots)):
-            for c in range(len(I.courses)):
+        for s in range(len(In.slots)):
+            for c in range(len(In.courses)):
                 hit = model.NewBoolVar("")  # course C is at slot S
                 model.Add(
-                    sum(self.src[(s, r, c)] for r in range(len(I.rooms))) == 1
+                    sum(self.src[(s, r, c)] for r in range(len(In.rooms))) == 1
                 ).OnlyEnforceIf(hit)
                 model.Add(
-                    sum(self.src[(s, r, c)] for r in range(len(I.rooms))) == 0
+                    sum(self.src[(s, r, c)] for r in range(len(In.rooms))) == 0
                 ).OnlyEnforceIf(hit.Not())
                 model.Add(self.cs[c] == s).OnlyEnforceIf(hit)
                 # we use -1 as a value for non-active (c_active) courses
                 model.Add(self.cs[c] != s).OnlyEnforceIf(hit.Not())
-                for t in range(len(I.teachers)):
+                for t in range(len(In.teachers)):
                     model.AddBoolAnd([hit, self.tc[(t, c)]]).OnlyEnforceIf(
                         self.tsc[(t, s, c)]
                     )
                     model.AddBoolOr([hit.Not(), self.tc[(t, c)].Not()]).OnlyEnforceIf(
                         self.tsc[(t, s, c)].Not()
                     )
-        for c in range(len(I.courses)):
-            C = I.courses[c]
-            if C in I.courses_regular:
+        for c in range(len(In.courses)):
+            C = In.courses[c]
+            if C in In.courses_regular:
                 # regular course => one lead, one follow
                 model.Add(
-                    sum(self.tc_lead[(t, c)] for t in range(len(I.teachers))) == 1
+                    sum(self.tc_lead[(t, c)] for t in range(len(In.teachers))) == 1
                 ).OnlyEnforceIf(self.c_active[c])
                 model.Add(
-                    sum(self.tc_follow[(t, c)] for t in range(len(I.teachers))) == 1
+                    sum(self.tc_follow[(t, c)] for t in range(len(In.teachers))) == 1
                 ).OnlyEnforceIf(self.c_active[c])
-                for t in range(len(I.teachers)):
+                for t in range(len(In.teachers)):
                     # TODO why XOr does not work?
                     # model.AddBoolXOr([self.tc_lead[(t,c)], self.tc_follow[(t,c)]]).OnlyEnforceIf(self.tc[(t,c)])
                     model.AddBoolOr(
@@ -990,105 +987,105 @@ class Model:
             else:
                 # non-regular course => no roles
                 model.Add(
-                    sum(self.tc_lead[(t, c)] for t in range(len(I.teachers))) == 0
+                    sum(self.tc_lead[(t, c)] for t in range(len(In.teachers))) == 0
                 )
                 model.Add(
-                    sum(self.tc_follow[(t, c)] for t in range(len(I.teachers))) == 0
+                    sum(self.tc_follow[(t, c)] for t in range(len(In.teachers))) == 0
                 )
         # inferring TS info
-        for s in range(len(I.slots)):
-            for t in range(len(I.teachers)):
+        for s in range(len(In.slots)):
+            for t in range(len(In.teachers)):
                 model.Add(
-                    sum(self.tsc[(t, s, c)] for c in range(len(I.courses))) == 1
+                    sum(self.tsc[(t, s, c)] for c in range(len(In.courses))) == 1
                 ).OnlyEnforceIf(self.ts[(t, s)])
                 model.Add(
-                    sum(self.tsc[(t, s, c)] for c in range(len(I.courses))) == 0
+                    sum(self.tsc[(t, s, c)] for c in range(len(In.courses))) == 0
                 ).OnlyEnforceIf(self.ts[(t, s)].Not())
         #        # construct AC info (person P attends course C)
-        #        for P in I.people:
-        #            p = I.Teachers[P]
-        #            if P in I.input_data:
-        #                courses_attend = I.input_data[P]["courses_attend"]
+        #        for P in In.people:
+        #            p = In.Teachers[P]
+        #            if P in In.input_data:
+        #                courses_attend = In.input_data[P]["courses_attend"]
         #            else:
         #                courses_attend = []
         #                error(f"unexpected - no attendance info for person {P}")
-        #            for c in range(len(I.courses)):
-        #                if [x for x in courses_attend if I.is_course_type(I.courses[c], x)]: # TODO course types
+        #            for c in range(len(In.courses)):
+        #                if [x for x in courses_attend if In.is_course_type(In.courses[c], x)]: # TODO course types
         #                    model.Add(self.ac[(p,c)] == 1)
         #                else:
         #                    model.Add(self.ac[(p,c)] == 0)
         #        # construct PC info (person P attends or teaches course C)
-        #        for P in I.people:
-        #            p = I.Teachers[P]
-        #            for c in range(len(I.courses)):
+        #        for P in In.people:
+        #            p = In.Teachers[P]
+        #            for c in range(len(In.courses)):
         #                model.AddBoolOr([self.tc[(p,c)], self.ac[(p,c)]]).OnlyEnforceIf(self.pc[(p,c)])
         #                model.AddBoolAnd([self.tc[(p,c)].Not(), self.ac[(p,c)].Not()]).OnlyEnforceIf(self.pc[(p,c)].Not())
         #        # inferring PSC info - person P attends or teaches course C in slot S
-        #        for s in range(len(I.slots)):
-        #            for c in range(len(I.courses)):
+        #        for s in range(len(In.slots)):
+        #            for c in range(len(In.courses)):
         #                hit = model.NewBoolVar("") # course C is at slot S
         #                model.Add(self.cs[c] == s).OnlyEnforceIf(hit)
         #                model.Add(self.cs[c] != s).OnlyEnforceIf(hit.Not())
-        #                for P in I.people:
-        #                    p = I.Teachers[P]
+        #                for P in In.people:
+        #                    p = In.Teachers[P]
         #                    model.AddBoolAnd([hit, self.pc[(p,c)]]).OnlyEnforceIf(self.psc[(p,s,c)])
         #                    model.AddBoolOr([hit.Not(), self.pc[(p,c)].Not()]).OnlyEnforceIf(self.psc[(p,s,c)].Not())
         #        # inferring PS info - person P teaches or attends at slot S
         #        # * teaching
         #        # * attending course
-        #        for s in range(len(I.slots)):
-        #            for P in I.people:
-        #                p = I.Teachers[P] # only teachers are people for now
+        #        for s in range(len(In.slots)):
+        #            for P in In.people:
+        #                p = In.Teachers[P] # only teachers are people for now
         ##                teach_or_learn = model.NewBoolVar("")
         ##                occupied_elsewhere = model.NewBoolVar("")
-        #                model.Add(sum(self.psc[(p,s,c)] for c in range(len(I.courses))) >= 1).OnlyEnforceIf(self.ps[(p,s)])
-        #                model.Add(sum(self.psc[(p,s,c)] for c in range(len(I.courses))) == 0).OnlyEnforceIf(self.ps[(p,s)].Not())
-        ##                model.Add(I.ts_pref[P][s] <= occ_thres).OnlyEnforceIf(occupied_elsewhere)
-        ##                model.Add(I.ts_pref[P][s] > occ_thres).OnlyEnforceIf(occupied_elsewhere.Not())
+        #                model.Add(sum(self.psc[(p,s,c)] for c in range(len(In.courses))) >= 1).OnlyEnforceIf(self.ps[(p,s)])
+        #                model.Add(sum(self.psc[(p,s,c)] for c in range(len(In.courses))) == 0).OnlyEnforceIf(self.ps[(p,s)].Not())
+        ##                model.Add(In.ts_pref[P][s] <= occ_thres).OnlyEnforceIf(occupied_elsewhere)
+        ##                model.Add(In.ts_pref[P][s] > occ_thres).OnlyEnforceIf(occupied_elsewhere.Not())
         ##                model.AddBoolOr([teach_or_learn, occupied_elsewhere]).OnlyEnforceIf(self.ps[(p,s)])
         ##                model.AddBoolAnd([teach_or_learn.Not(), occupied_elsewhere.Not()]).OnlyEnforceIf(self.ps[(p,s)].Not())
-        #                #model.Add(sum(self.psc[(p,s,c)] for c in range(len(I.courses))) == 1).OnlyEnforceIf(self.ps[(p,s)])
-        #                #model.Add(sum(self.psc[(p,s,c)] for c in range(len(I.courses))) == 0).OnlyEnforceIf(self.ps[(p,s)].Not())
+        #                #model.Add(sum(self.psc[(p,s,c)] for c in range(len(In.courses))) == 1).OnlyEnforceIf(self.ps[(p,s)])
+        #                #model.Add(sum(self.psc[(p,s,c)] for c in range(len(In.courses))) == 0).OnlyEnforceIf(self.ps[(p,s)].Not())
         # inferring TD info
-        for d in range(len(I.days)):
-            for t in range(len(I.teachers)):
+        for d in range(len(In.days)):
+            for t in range(len(In.teachers)):
                 model.Add(
                     sum(
                         self.ts[(t, s)]
-                        for s in range(d * len(I.times), (d + 1) * len(I.times))
+                        for s in range(d * len(In.times), (d + 1) * len(In.times))
                     )
                     >= 1
                 ).OnlyEnforceIf(self.td[(t, d)])
                 model.Add(
                     sum(
                         self.ts[(t, s)]
-                        for s in range(d * len(I.times), (d + 1) * len(I.times))
+                        for s in range(d * len(In.times), (d + 1) * len(In.times))
                     )
                     == 0
                 ).OnlyEnforceIf(self.td[(t, d)].Not())
         #        # inferring PD info
-        #        for d in range(len(I.days)):
-        #            for P in I.people:
-        #                p = I.Teachers[P] # only teachers are people for now
-        #                model.Add(sum(self.ps[(p,s)] for s in range(d*len(I.times), (d+1)*len(I.times))) >= 1).OnlyEnforceIf(self.pd[(p,d)])
-        #                model.Add(sum(self.ps[(p,s)] for s in range(d*len(I.times), (d+1)*len(I.times))) == 0).OnlyEnforceIf(self.pd[(p,d)].Not())
+        #        for d in range(len(In.days)):
+        #            for P in In.people:
+        #                p = In.Teachers[P] # only teachers are people for now
+        #                model.Add(sum(self.ps[(p,s)] for s in range(d*len(In.times), (d+1)*len(In.times))) >= 1).OnlyEnforceIf(self.pd[(p,d)])
+        #                model.Add(sum(self.ps[(p,s)] for s in range(d*len(In.times), (d+1)*len(In.times))) == 0).OnlyEnforceIf(self.pd[(p,d)].Not())
         #
         # when do we consider person occupied according to slot preferences
         occ_thres = 0
-        for s in range(len(I.slots)):
-            for P in I.people:
+        for s in range(len(In.slots)):
+            for P in In.people:
                 # FIXME
-                p = I.Teachers[P]  # only teachers are people for now
-                model.Add(I.ts_pref[P][s] <= occ_thres).OnlyEnforceIf(
+                p = In.Teachers[P]  # only teachers are people for now
+                model.Add(In.ts_pref[P][s] <= occ_thres).OnlyEnforceIf(
                     self.ps_occupied[(p, s)]
                 )
-                model.Add(I.ts_pref[P][s] > occ_thres).OnlyEnforceIf(
+                model.Add(In.ts_pref[P][s] > occ_thres).OnlyEnforceIf(
                     self.ps_occupied[(p, s)].Not()
                 )
 
-        for s in range(len(I.slots)):
-            for P in I.people:
-                p = I.Teachers[P]  # only teachers are people for now
+        for s in range(len(In.slots)):
+            for P in In.people:
+                p = In.Teachers[P]  # only teachers are people for now
                 model.AddBoolOr(
                     [self.ts[(p, s)], self.ps_occupied[(p, s)]]
                 ).OnlyEnforceIf(self.ps_na[(p, s)])
@@ -1097,73 +1094,73 @@ class Model:
                 ).OnlyEnforceIf(self.ps_na[(p, s)].Not())
         #
         # inferring TDV info
-        for s in range(len(I.slots)):
-            for c in range(len(I.courses)):
-                for v in range(len(I.venues)):
+        for s in range(len(In.slots)):
+            for c in range(len(In.courses)):
+                for v in range(len(In.venues)):
                     hit = model.NewBoolVar("")  # course C is at slot S in venue V
                     model.Add(
                         sum(
                             self.src[(s, r, c)]
-                            for r in range(len(I.rooms))
-                            if I.rooms_venues[I.rooms[r]] == I.venues[v]
+                            for r in range(len(In.rooms))
+                            if In.rooms_venues[In.rooms[r]] == In.venues[v]
                         )
                         == 1
                     ).OnlyEnforceIf(hit)
                     model.Add(
                         sum(
                             self.src[(s, r, c)]
-                            for r in range(len(I.rooms))
-                            if I.rooms_venues[I.rooms[r]] == I.venues[v]
+                            for r in range(len(In.rooms))
+                            if In.rooms_venues[In.rooms[r]] == In.venues[v]
                         )
                         == 0
                     ).OnlyEnforceIf(hit.Not())
-                    for t in range(len(I.teachers)):
+                    for t in range(len(In.teachers)):
                         model.AddBoolAnd([hit, self.tc[(t, c)]]).OnlyEnforceIf(
                             self.tscv[(t, s, c, v)]
                         )
                         model.AddBoolOr(
                             [hit.Not(), self.tc[(t, c)].Not()]
                         ).OnlyEnforceIf(self.tscv[(t, s, c, v)].Not())
-        for t in range(len(I.teachers)):
-            for d in range(len(I.days)):
-                for v in range(len(I.venues)):
+        for t in range(len(In.teachers)):
+            for d in range(len(In.days)):
+                for v in range(len(In.venues)):
                     model.Add(
                         sum(
                             self.tscv[(t, s, c, v)]
-                            for s in range(d * len(I.times), (d + 1) * len(I.times))
-                            for c in range(len(I.courses))
+                            for s in range(d * len(In.times), (d + 1) * len(In.times))
+                            for c in range(len(In.courses))
                         )
                         >= 1
                     ).OnlyEnforceIf(self.tdv[(t, d, v)])
                     model.Add(
                         sum(
                             self.tscv[(t, s, c, v)]
-                            for s in range(d * len(I.times), (d + 1) * len(I.times))
-                            for c in range(len(I.courses))
+                            for s in range(d * len(In.times), (d + 1) * len(In.times))
+                            for c in range(len(In.courses))
                         )
                         == 0
                     ).OnlyEnforceIf(self.tdv[(t, d, v)].Not())
         # inferring CV info
         self.cv = []
-        for c in range(len(I.courses)):
-            self.cv.append(model.NewIntVar(0, len(I.venues) - 1, ""))
-            for v in range(len(I.venues)):
+        for c in range(len(In.courses)):
+            self.cv.append(model.NewIntVar(0, len(In.venues) - 1, ""))
+            for v in range(len(In.venues)):
                 hit = model.NewBoolVar("")
                 model.Add(
                     sum(
                         self.src[(s, r, c)]
-                        for s in range(len(I.slots))
-                        for r in range(len(I.rooms))
-                        if I.rooms_venues[I.rooms[r]] == I.venues[v]
+                        for s in range(len(In.slots))
+                        for r in range(len(In.rooms))
+                        if In.rooms_venues[In.rooms[r]] == In.venues[v]
                     )
                     >= 1
                 ).OnlyEnforceIf(hit)
                 model.Add(
                     sum(
                         self.src[(s, r, c)]
-                        for s in range(len(I.slots))
-                        for r in range(len(I.rooms))
-                        if I.rooms_venues[I.rooms[r]] == I.venues[v]
+                        for s in range(len(In.slots))
+                        for r in range(len(In.rooms))
+                        if In.rooms_venues[In.rooms[r]] == In.venues[v]
                     )
                     == 0
                 ).OnlyEnforceIf(hit.Not())
@@ -1173,100 +1170,101 @@ class Model:
 
         # number of lessons teacher T teaches
         self.teach_num = {}
-        for t in range(len(I.teachers)):
-            self.teach_num[t] = model.NewIntVar(0, len(I.slots), "Tteach_num:%i" % t)
+        for t in range(len(In.teachers)):
+            self.teach_num[t] = model.NewIntVar(0, len(In.slots), "Tteach_num:%i" % t)
             model.Add(
-                self.teach_num[t] == sum(self.tc[(t, c)] for c in range(len(I.courses)))
+                self.teach_num[t]
+                == sum(self.tc[(t, c)] for c in range(len(In.courses)))
             )
         # does teacher T teach at least one course?
         self.does_not_teach = []
-        for t in range(len(I.teachers)):
+        for t in range(len(In.teachers)):
             hit = model.NewBoolVar("")
             model.Add(self.teach_num[t] == 0).OnlyEnforceIf(hit)
             model.Add(self.teach_num[t] > 0).OnlyEnforceIf(hit.Not())
             self.does_not_teach.append(hit)
         # number of slots person P occupies (teaches or attends)
         self.occupied_num = {}
-        for P in I.people:
-            p = I.Teachers[P]
-            self.occupied_num[p] = model.NewIntVar(0, len(I.slots), "")
+        for P in In.people:
+            p = In.Teachers[P]
+            self.occupied_num[p] = model.NewIntVar(0, len(In.slots), "")
             model.Add(
                 self.occupied_num[p]
-                == sum(self.ps[(p, s)] for s in range(len(I.slots)))
+                == sum(self.ps[(p, s)] for s in range(len(In.slots)))
             )
 
         # prevent teachers from teaching two courses at the same time
-        for t in range(len(I.teachers)):
-            for s in range(len(I.slots)):
-                model.Add(sum(self.tsc[(t, s, c)] for c in range(len(I.courses))) <= 1)
+        for t in range(len(In.teachers)):
+            for s in range(len(In.slots)):
+                model.Add(sum(self.tsc[(t, s, c)] for c in range(len(In.courses))) <= 1)
 
         # one course takes place at one time in one room
-        for c in range(len(I.courses)):
+        for c in range(len(In.courses)):
             # TODO this is probably the crucial spot to solve courses discrepancy
-            if I.courses[c] not in I.COURSES_IGNORE:
-                debug(f"Not ignoring one-place-time constraing for {I.courses[c]}")
+            if In.courses[c] not in In.COURSES_IGNORE:
+                debug(f"Not ignoring one-place-time constraing for {In.courses[c]}")
                 model.Add(
                     sum(
                         self.src[(s, r, c)]
-                        for s in range(len(I.slots))
-                        for r in range(len(I.rooms))
+                        for s in range(len(In.slots))
+                        for r in range(len(In.rooms))
                     )
                     == 1
                 ).OnlyEnforceIf(self.c_active[c])
                 model.Add(
                     sum(
                         self.src[(s, r, c)]
-                        for s in range(len(I.slots))
-                        for r in range(len(I.rooms))
+                        for s in range(len(In.slots))
+                        for r in range(len(In.rooms))
                     )
                     == 0
                 ).OnlyEnforceIf(self.c_active[c].Not())
             else:
-                # assert that I.courses contains only non-ignored courses
-                error(f"Ignoring one-place-time constraing for {I.courses[c]}")
+                # assert that In.courses contains only non-ignored courses
+                error(f"Ignoring one-place-time constraing for {In.courses[c]}")
 
         # at one time in one room, there is maximum one course
-        for s in range(len(I.slots)):
-            for r in range(len(I.rooms)):
-                model.Add(sum(self.src[(s, r, c)] for c in range(len(I.courses))) <= 1)
+        for s in range(len(In.slots)):
+            for r in range(len(In.rooms)):
+                model.Add(sum(self.src[(s, r, c)] for c in range(len(In.courses))) <= 1)
 
         # every regular course is taught by two teachers and solo course by one teacher
-        for c in range(len(I.courses)):
-            if I.courses[c] in I.COURSES_IGNORE:
-                # assert that I.courses contains only non-ignored courses
-                error(f"Course {I.courses[c]} should be ignored")
-            elif I.courses[c] in I.courses_regular:
+        for c in range(len(In.courses)):
+            if In.courses[c] in In.COURSES_IGNORE:
+                # assert that In.courses contains only non-ignored courses
+                error(f"Course {In.courses[c]} should be ignored")
+            elif In.courses[c] in In.courses_regular:
                 model.Add(
                     sum(
-                        self.tc[(I.Teachers[T], c)]
-                        for T in I.teachers
-                        if T in I.teachers_lead
+                        self.tc[(In.Teachers[T], c)]
+                        for T in In.teachers
+                        if T in In.teachers_lead
                     )
                     <= 1
                 )
                 model.Add(
                     sum(
-                        self.tc[(I.Teachers[T], c)]
-                        for T in I.teachers
-                        if T in I.teachers_follow
+                        self.tc[(In.Teachers[T], c)]
+                        for T in In.teachers
+                        if T in In.teachers_follow
                     )
                     <= 1
                 )
                 model.Add(
-                    sum(self.tc[(I.Teachers[T], c)] for T in I.teachers) == 2
+                    sum(self.tc[(In.Teachers[T], c)] for T in In.teachers) == 2
                 ).OnlyEnforceIf(self.c_active[c])
                 model.Add(
-                    sum(self.tc[(I.Teachers[T], c)] for T in I.teachers) == 0
+                    sum(self.tc[(In.Teachers[T], c)] for T in In.teachers) == 0
                 ).OnlyEnforceIf(self.c_active[c].Not())
-            elif I.courses[c] in I.courses_solo:
+            elif In.courses[c] in In.courses_solo:
                 model.Add(
-                    sum(self.tc[(I.Teachers[T], c)] for T in I.teachers) == 1
+                    sum(self.tc[(In.Teachers[T], c)] for T in In.teachers) == 1
                 ).OnlyEnforceIf(self.c_active[c])
                 model.Add(
-                    sum(self.tc[(I.Teachers[T], c)] for T in I.teachers) == 0
+                    sum(self.tc[(In.Teachers[T], c)] for T in In.teachers) == 0
                 ).OnlyEnforceIf(self.c_active[c].Not())
-            elif I.courses[c] in I.courses_open:
-                model.Add(sum(self.tc[(I.Teachers[T], c)] for T in I.teachers) == 0)
+            elif In.courses[c] in In.courses_open:
+                model.Add(sum(self.tc[(In.Teachers[T], c)] for T in In.teachers) == 0)
             else:
                 assert False
 
@@ -1278,110 +1276,111 @@ class Model:
         self.penalties["custom"] = {}
         self.penalties["nice"] = {}
 
-        for T in I.teachers:
-            debug(f"Teacher max: {T} {I.t_util_max.get(T, -1)}")
+        for T in In.teachers:
+            debug(f"Teacher max: {T} {In.t_util_max.get(T, -1)}")
             # unspecified teachers teach no courses
             self.add_heavy(
                 f"{T}-ncourses",
-                sum(self.tc[(I.Teachers[T], c)] for c in range(len(I.courses)))
-                <= I.t_util_max.get(T, 0),
+                sum(self.tc[(In.Teachers[T], c)] for c in range(len(In.courses)))
+                <= In.t_util_max.get(T, 0),
             )
             self.add_heavy(
                 f"{T}-ndays",
-                sum(self.td[(I.Teachers[T], d)] for d in range(len(I.days)))
-                <= I.t_days_max.get(T, 0),
+                sum(self.td[(In.Teachers[T], d)] for d in range(len(In.days)))
+                <= In.t_days_max.get(T, 0),
             )
 
-        info(f"Courses that must open: {', '.join(I.courses_must_open)}")
-        for C in I.courses_must_open:
-            self.add_heavy(f"mustopen-{C}", self.c_active[I.Courses[C]] == 1)
+        info(f"Courses that must open: {', '.join(In.courses_must_open)}")
+        for C in In.courses_must_open:
+            self.add_heavy(f"mustopen-{C}", self.c_active[In.Courses[C]] == 1)
 
-        for C in I.courses_not_open:
-            self.add_heavy(f"notopen-{C}", self.c_active[I.Courses[C]] == 0)
+        for C in In.courses_not_open:
+            self.add_heavy(f"notopen-{C}", self.c_active[In.Courses[C]] == 0)
 
-        teachers_all = set(range(len(I.teachers)))
-        for C, Ts in I.ct_possible.items():
-            c = I.Courses[C]
+        teachers_all = set(range(len(In.teachers)))
+        for C, Ts in In.ct_possible.items():
+            c = In.Courses[C]
             teachers_can = []
             for T in Ts:
-                t = I.Teachers[T]
+                t = In.Teachers[T]
                 teachers_can.append(t)
             teachers_not = teachers_all - set(teachers_can)
             # no other teacher can teach C
             model.Add(sum(self.tc[(t, c)] for t in teachers_not) == 0)
-        for C, Ts in I.ct_possible_lead.items():
-            c = I.Courses[C]
+        for C, Ts in In.ct_possible_lead.items():
+            c = In.Courses[C]
             teachers_can = []
             for T in Ts:
-                t = I.Teachers[T]
+                t = In.Teachers[T]
                 teachers_can.append(t)
             teachers_not = teachers_all - set(teachers_can)
             # no other teacher can teach C
             model.Add(sum(self.tc_lead[(t, c)] for t in teachers_not) == 0)
-        for C, Ts in I.ct_possible_follow.items():
-            c = I.Courses[C]
+        for C, Ts in In.ct_possible_follow.items():
+            c = In.Courses[C]
             teachers_can = []
             for T in Ts:
-                t = I.Teachers[T]
+                t = In.Teachers[T]
                 teachers_can.append(t)
             teachers_not = teachers_all - set(teachers_can)
             # no other teacher can teach C
             model.Add(sum(self.tc_follow[(t, c)] for t in teachers_not) == 0)
 
-        for T1, T2 in set(I.tt_not_together):
-            for c in range(len(I.courses)):
-                # model.Add(sum(self.tc[(t,c)] for t in [I.Teachers[T1], I.Teachers[T2]]) < 2)
+        for T1, T2 in set(In.tt_not_together):
+            for c in range(len(In.courses)):
+                # model.Add(sum(self.tc[(t,c)] for t in [In.Teachers[T1], In.Teachers[T2]]) < 2)
                 self.add_heavy(
-                    f"tt_not/{T1}+{T2}/{I.courses[c]}".replace(" ", "-"),
-                    sum(self.tc[(t, c)] for t in [I.Teachers[T1], I.Teachers[T2]]) < 2,
+                    f"tt_not/{T1}+{T2}/{In.courses[c]}".replace(" ", "-"),
+                    sum(self.tc[(t, c)] for t in [In.Teachers[T1], In.Teachers[T2]])
+                    < 2,
                 )
 
         # TODO: this should be loosened, also wrt. attending
         # teacher T does not teach in two venues in the same day
-        for t in range(len(I.teachers)):
-            for d in range(len(I.days)):
-                model.Add(sum(self.tdv[(t, d, v)] for v in range(len(I.venues))) <= 1)
+        for t in range(len(In.teachers)):
+            for d in range(len(In.days)):
+                model.Add(sum(self.tdv[(t, d, v)] for v in range(len(In.venues))) <= 1)
 
         # teachers HARD slot preferences
-        for T in I.teachers:
-            if T in I.ts_pref:  # TODO what about people without preferences?
-                for s, v in enumerate(I.ts_pref[T]):
+        for T in In.teachers:
+            if T in In.ts_pref:  # TODO what about people without preferences?
+                for s, v in enumerate(In.ts_pref[T]):
                     if v == 0:
-                        model.Add(self.ts[(I.Teachers[T], s)] == 0)
+                        model.Add(self.ts[(In.Teachers[T], s)] == 0)
             else:
                 warn(f"No slot preferences for teacher {T}")
 
         # strict course -> slot mapping
-        debug(f"I.courses_slots_strict: {I.courses_slots_strict}")
-        for C, s in I.courses_slots_strict.items():
-            self.add_heavy(f"cs-strict-{C}", self.cs[I.Courses[C]] == s)
+        debug(f"In.courses_slots_strict: {In.courses_slots_strict}")
+        for C, s in In.courses_slots_strict.items():
+            self.add_heavy(f"cs-strict-{C}", self.cs[In.Courses[C]] == s)
 
         # same courses should not happen in same days and also not in same times
         # it should probably not be a strict limitation, but it is much easier to write
         # TODO could be turned into heavy penalty, but probably later in the process (after init_penalties)
         debug("courses_different")
-        for Cs in I.courses_different:
+        for Cs in In.courses_different:
             debug(f"courses_different: Cs: {Cs}")
             daylist = []  # days
             timelist = []  # times
             courselist = []
-            # assert(2 <= len(Cs) <= min(len(I.days), len(I.times)))
+            # assert(2 <= len(Cs) <= min(len(In.days), len(In.times)))
             assert 2 <= len(Cs)
             if len(Cs) > 3:
                 error(
                     "courses_different does not work for more than 3 courses, to be fixed"
                 )
             for C in Cs:
-                c = I.Courses[C]
+                c = In.Courses[C]
                 debug(f"courses_different: C: {C} ({c})")
-                day = model.NewIntVar(-1, len(I.days) - 1, "")
-                time = model.NewIntVar(-1, len(I.times) - 1, "")
-                model.AddDivisionEquality(day, self.cs[c], len(I.times))
-                model.AddModuloEquality(time, self.cs[c], len(I.times))
+                day = model.NewIntVar(-1, len(In.days) - 1, "")
+                time = model.NewIntVar(-1, len(In.times) - 1, "")
+                model.AddDivisionEquality(day, self.cs[c], len(In.times))
+                model.AddModuloEquality(time, self.cs[c], len(In.times))
                 debug(f"courses_different: courselist: {courselist}")
                 for i in range(len(courselist)):
                     co = courselist[i]
-                    debug(f"courses_different: co: {co} ({I.courses[co]})")
+                    debug(f"courses_different: co: {co} ({In.courses[co]})")
                     D = daylist[i]
                     T = timelist[i]
                     model.Add(day != D).OnlyEnforceIf(
@@ -1400,42 +1399,42 @@ class Model:
         # stop()
 
         # courses that should not happen in same days
-        for Cs in I.courses_diffday:
+        for Cs in In.courses_diffday:
             daylist = []  # days
-            assert 2 <= len(Cs) <= len(I.days)
+            assert 2 <= len(Cs) <= len(In.days)
             for C in Cs:
-                day = model.NewIntVar(0, len(I.days) - 1, "")
-                model.AddDivisionEquality(day, self.cs[I.Courses[C]], len(I.times))
-                # model.AddModuloEquality(time, self.cs[I.Courses[C]], len(I.times))
+                day = model.NewIntVar(0, len(In.days) - 1, "")
+                model.AddDivisionEquality(day, self.cs[In.Courses[C]], len(In.times))
+                # model.AddModuloEquality(time, self.cs[In.Courses[C]], len(In.times))
                 daylist.append(day)
             model.AddAllDifferent(daylist)
 
         # courses that should follow each other in the same day in the same venue
-        for Cs in I.courses_same:
+        for Cs in In.courses_same:
             daylist = []  # days
             timelist = []  # times
             venuelist = []  # venues
-            assert 2 <= len(Cs) <= len(I.times)
+            assert 2 <= len(Cs) <= len(In.times)
             for C in Cs:
-                day = model.NewIntVar(0, len(I.days) - 1, "")
-                time = model.NewIntVar(0, len(I.times) - 1, "")
-                venue = model.NewIntVar(0, len(I.venues) - 1, "")
-                model.AddDivisionEquality(day, self.cs[I.Courses[C]], len(I.times))
-                model.AddModuloEquality(time, self.cs[I.Courses[C]], len(I.times))
-                model.Add(venue == self.cv[I.Courses[C]])
+                day = model.NewIntVar(0, len(In.days) - 1, "")
+                time = model.NewIntVar(0, len(In.times) - 1, "")
+                venue = model.NewIntVar(0, len(In.venues) - 1, "")
+                model.AddDivisionEquality(day, self.cs[In.Courses[C]], len(In.times))
+                model.AddModuloEquality(time, self.cs[In.Courses[C]], len(In.times))
+                model.Add(venue == self.cv[In.Courses[C]])
                 daylist.append(day)
                 timelist.append(time)
                 venuelist.append(venue)
             model.AddAllowedAssignments(
-                daylist, [[d] * len(Cs) for d in range(len(I.days))]
+                daylist, [[d] * len(Cs) for d in range(len(In.days))]
             )
             model.AddAllowedAssignments(
-                venuelist, [[v] * len(Cs) for v in range(len(I.venues))]
+                venuelist, [[v] * len(Cs) for v in range(len(In.venues))]
             )
-            if len(Cs) == len(I.times):
+            if len(Cs) == len(In.times):
                 # filling whole day
                 model.AddAllDifferent(timelist)
-            elif len(Cs) == len(I.times) - 1:
+            elif len(Cs) == len(In.times) - 1:
                 # filling 2 out of three slots
                 assert len(Cs) == 2
                 model.AddAllowedAssignments(timelist, [[0, 1], [1, 0], [1, 2], [2, 1]])
@@ -1443,21 +1442,22 @@ class Model:
                 # should not happen
                 assert False
 
-        for C, R in I.cr_not.items():
+        for C, R in In.cr_not.items():
             model.Add(
                 sum(
-                    self.src[(s, I.Rooms[R], I.Courses[C])] for s in range(len(I.slots))
+                    self.src[(s, In.Rooms[R], In.Courses[C])]
+                    for s in range(len(In.slots))
                 )
                 == 0
             )
 
-        for C, R in I.cr_strict.items():
-            c = I.Courses[C]
+        for C, R in In.cr_strict.items():
+            c = In.Courses[C]
             model.Add(
-                sum(self.src[(s, I.Rooms[R], c)] for s in range(len(I.slots))) == 1
+                sum(self.src[(s, In.Rooms[R], c)] for s in range(len(In.slots))) == 1
             ).OnlyEnforceIf(self.c_active[c])
             model.Add(
-                sum(self.src[(s, I.Rooms[R], c)] for s in range(len(I.slots))) == 0
+                sum(self.src[(s, In.Rooms[R], c)] for s in range(len(In.slots))) == 0
             ).OnlyEnforceIf(self.c_active[c].Not())
 
         self.custom_penalties = {}
@@ -1465,19 +1465,19 @@ class Model:
 
     def init_penalties(self):
         debug("Model: init_penalties")
-        I = self.I
+        In = self.In
         M = self
         model = self.model
 
         # OPTIMIZATION
 
         self.wish = {}
-        for T in I.Teachers:
+        for T in In.Teachers:
             self.wish[T] = model.NewBoolVar("")
 
         penalties_analysis = {}  # deeper analysis functions for penalties # TODO remove
 
-        for name, coeff in I.PENALTIES.items():
+        for name, coeff in In.PENALTIES.items():
             if coeff == 0:
                 warn(f"Penalties: skipping '{name}'")
                 continue
@@ -1485,12 +1485,12 @@ class Model:
                 self.penalties["teacher"] = {}
                 total_teacher = coeff
 
-                for T in I.Teachers:
-                    t = I.Teachers[T]
+                for T in In.Teachers:
+                    t = In.Teachers[T]
                     self.penalties["teacher"][T] = {}
 
                     # precompute real penalty weigths
-                    ic = I.input_data[T]["ic"]
+                    ic = In.input_data[T]["ic"]
                     total_ic = sum(ic.values())
                     if total_ic == 0:
                         # this is the case when a person does not mind anything
@@ -1503,7 +1503,7 @@ class Model:
                     # utilization
 
                     # utilization - general
-                    util_ideal = I.t_util_ideal[T]
+                    util_ideal = In.t_util_ideal[T]
                     MAX_DIFF = 10  # set according to preferences form
                     util_diff = model.NewIntVar(-MAX_DIFF, MAX_DIFF, "")
                     model.Add(util_diff == M.teach_num[t] - util_ideal)
@@ -1547,9 +1547,9 @@ class Model:
                     M.add_heavy(f"2less-{T}", util_diff_neg <= 1)
 
                     # 3c1d - three courses in one day
-                    p31 = model.NewIntVar(0, len(I.days) * icw["3c1d"], "")
+                    p31 = model.NewIntVar(0, len(In.days) * icw["3c1d"], "")
                     days_three_list = []
-                    for d in range(len(I.days)):
+                    for d in range(len(In.days)):
                         # day is full (teacher teaches in all three slots)
                         day_three = model.NewBoolVar("")
                         model.Add(
@@ -1565,11 +1565,11 @@ class Model:
                     self.penalties["teacher"][T]["3c1d"] = p31
 
                     # 2c2d - courses in more days than needed
-                    teaches_days = model.NewIntVar(0, len(I.days), "TD:%i" % t)
+                    teaches_days = model.NewIntVar(0, len(In.days), "TD:%i" % t)
                     model.Add(
-                        teaches_days == sum(M.td[(t, d)] for d in range(len(I.days)))
+                        teaches_days == sum(M.td[(t, d)] for d in range(len(In.days)))
                     )
-                    teaches_minus_1 = model.NewIntVar(0, len(I.slots), "Tm1:%i" % t)
+                    teaches_minus_1 = model.NewIntVar(0, len(In.slots), "Tm1:%i" % t)
                     teaches_some = model.NewBoolVar("Ts:%i" % t)
                     model.Add(M.teach_num[t] >= 1).OnlyEnforceIf(teaches_some)
                     model.Add(M.teach_num[t] == 0).OnlyEnforceIf(teaches_some.Not())
@@ -1578,17 +1578,17 @@ class Model:
                     )
                     model.Add(teaches_minus_1 == 0).OnlyEnforceIf(teaches_some.Not())
                     should_teach_days_minus_1 = model.NewIntVar(
-                        0, len(I.days), "TDs:%i" % t
+                        0, len(In.days), "TDs:%i" % t
                     )
                     model.AddDivisionEquality(
-                        should_teach_days_minus_1, teaches_minus_1, len(I.times)
+                        should_teach_days_minus_1, teaches_minus_1, len(In.times)
                     )  # -1 to compensate rounding down
-                    days_extra = model.NewIntVar(0, len(I.days), "Tdd:%i" % t)
+                    days_extra = model.NewIntVar(0, len(In.days), "Tdd:%i" % t)
                     model.Add(
                         days_extra == teaches_days - should_teach_days_minus_1 - 1
                     ).OnlyEnforceIf(teaches_some)  # -1 to compensate rounding down
                     model.Add(days_extra == 0).OnlyEnforceIf(teaches_some.Not())
-                    p22 = model.NewIntVar(0, icw["2c2d"] * len(I.days), "")
+                    p22 = model.NewIntVar(0, icw["2c2d"] * len(In.days), "")
                     model.Add(p22 == icw["2c2d"] * days_extra)
                     self.penalties["teacher"][T]["2c2d"] = p22
 
@@ -1602,18 +1602,18 @@ class Model:
                     self.penalties["teacher"][T]["not_teaching"] = p_not_teaching
 
                     # teaching or not being available during Teachers Training
-                    if "Teachers Training" in I.Courses and "tt" in icw:
+                    if "Teachers Training" in In.Courses and "tt" in icw:
                         tt_map = []
-                        c = I.Courses["Teachers Training"]
-                        for s in range(len(I.slots)):
+                        c = In.Courses["Teachers Training"]
+                        for s in range(len(In.slots)):
                             hit = model.NewBoolVar("")
                             model.Add(M.cs[c] == s).OnlyEnforceIf(hit)
                             model.Add(M.cs[c] != s).OnlyEnforceIf(hit.Not())
                             tt_map.append(hit)
 
                         w = icw["tt"]
-                        l = []
-                        for s in range(len(I.slots)):
+                        ls = []
+                        for s in range(len(In.slots)):
                             hit = model.NewBoolVar("")
                             model.AddBoolAnd(
                                 [tt_map[s], M.ps_na[(t, s)]]
@@ -1621,13 +1621,13 @@ class Model:
                             model.AddBoolOr(
                                 [tt_map[s].Not(), M.ps_na[(t, s)].Not()]
                             ).OnlyEnforceIf(hit.Not())
-                            l.append(hit)
+                            ls.append(hit)
                         teaches_tt = model.NewBoolVar("")
-                        c = I.Courses["Teachers Training"]
+                        c = In.Courses["Teachers Training"]
                         model.Add(M.tc[(t, c)] == 1).OnlyEnforceIf(teaches_tt)
                         model.Add(M.tc[(t, c)] == 0).OnlyEnforceIf(teaches_tt.Not())
                         teaches_tt_time = model.NewBoolVar("")
-                        model.Add(teaches_tt_time == sum(l)).OnlyEnforceIf(
+                        model.Add(teaches_tt_time == sum(ls)).OnlyEnforceIf(
                             teaches_tt.Not()
                         )
                         model.Add(teaches_tt_time == 0).OnlyEnforceIf(teaches_tt)
@@ -1636,20 +1636,20 @@ class Model:
                         self.penalties["teacher"][T]["tt"] = p_tt
 
                     # split
-                    days_split = model.NewIntVar(0, len(I.days), "TDsplit:%i" % t)
+                    days_split = model.NewIntVar(0, len(In.days), "TDsplit:%i" % t)
                     tsplits = []
-                    for d in range(len(I.days)):
+                    for d in range(len(In.days)):
                         # tsplit == True iff teacher t teaches just the first and the last course in day d
                         tsubsplits = []
-                        for i in range(len(I.times)):
+                        for i in range(len(In.times)):
                             tsubsplit = model.NewBoolVar(
                                 "tsubsplit:t%id%ii%i" % (t, d, i)
                             )
                             model.Add(
-                                sum(M.ts[(t, s)] for s in [d * len(I.times) + i]) == 1
+                                sum(M.ts[(t, s)] for s in [d * len(In.times) + i]) == 1
                             ).OnlyEnforceIf(tsubsplit)
                             model.Add(
-                                sum(M.ts[(t, s)] for s in [d * len(I.times) + i]) == 0
+                                sum(M.ts[(t, s)] for s in [d * len(In.times) + i]) == 0
                             ).OnlyEnforceIf(tsubsplit.Not())
                             tsubsplits.append(tsubsplit)
                         tsplit = model.NewBoolVar("tsplit:t%id%i" % (t, d))
@@ -1661,13 +1661,13 @@ class Model:
                         ).OnlyEnforceIf(tsplit.Not())
                         tsplits.append(tsplit)
                     model.Add(days_split == sum(tsplits))
-                    p_split = model.NewIntVar(0, icw["split"] * len(I.days), "")
+                    p_split = model.NewIntVar(0, icw["split"] * len(In.days), "")
                     model.Add(p_split == icw["split"] * days_split)
                     self.penalties["teacher"][T]["split"] = p_split
 
                     # bad_time
-                    prefs = I.ts_pref[T]
-                    slots_bad = [s for s in range(len(I.slots)) if prefs[s] == 1]
+                    prefs = In.ts_pref[T]
+                    slots_bad = [s for s in range(len(In.slots)) if prefs[s] == 1]
                     p_slot_bad = model.NewIntVar(0, icw["bad_time"] * 10, "")
                     model.Add(
                         p_slot_bad
@@ -1679,23 +1679,25 @@ class Model:
                     # teacher T strongly prefers some courses over others
                     courses_bad = [
                         C
-                        for C in I.courses_regular + I.courses_solo
-                        if I.tc_pref[T].get(C, -1) == 1
+                        for C in In.courses_regular + In.courses_solo
+                        if In.tc_pref[T].get(C, -1) == 1
                     ]
                     p_course_bad = model.NewIntVar(0, icw["bad_course"] * 10, "")
                     debug(f"courses_bad {T}: {courses_bad}")
                     model.Add(
                         p_course_bad
                         == icw["bad_course"]
-                        * sum(M.tc[(I.Teachers[T], I.Courses[C])] for C in courses_bad)
+                        * sum(
+                            M.tc[(In.Teachers[T], In.Courses[C])] for C in courses_bad
+                        )
                     )
                     self.penalties["teacher"][T]["bad_course"] = p_course_bad
 
                     # no_perfect
                     courses_perfect = [
                         C
-                        for C in I.courses_regular + I.courses_solo
-                        if I.tc_pref[T].get(C, -1) == 3
+                        for C in In.courses_regular + In.courses_solo
+                        if In.tc_pref[T].get(C, -1) == 3
                     ]
                     p_no_perfect = model.NewIntVar(0, icw["no_perfect"], "")
                     debug(f"courses_perfect {T}: {courses_perfect}")
@@ -1703,7 +1705,8 @@ class Model:
                     model.Add(
                         teaches_perfect
                         == sum(
-                            M.tc[(I.Teachers[T], I.Courses[C])] for C in courses_perfect
+                            M.tc[(In.Teachers[T], In.Courses[C])]
+                            for C in courses_perfect
                         )
                     )
                     zero = model.NewBoolVar("")
@@ -1713,20 +1716,20 @@ class Model:
                     self.penalties["teacher"][T]["no_perfect"] = p_no_perfect
 
                     # no_person
-                    debug(f"teach_together: {T} + {I.tt_together[T]}")
+                    debug(f"teach_together: {T} + {In.tt_together[T]}")
                     success_list = []
-                    for c in range(len(I.courses)):
+                    for c in range(len(In.courses)):
                         hit_self = model.NewBoolVar("")
                         hit_other = model.NewBoolVar("")
                         success = model.NewBoolVar("")
                         model.Add(M.tc[(t, c)] == 1).OnlyEnforceIf(hit_self)
                         model.Add(M.tc[(t, c)] == 0).OnlyEnforceIf(hit_self.Not())
                         model.Add(
-                            sum(M.tc[(I.Teachers[To], c)] for To in I.tt_together[T])
+                            sum(M.tc[(In.Teachers[To], c)] for To in In.tt_together[T])
                             >= 1
                         ).OnlyEnforceIf(hit_other)
                         model.Add(
-                            sum(M.tc[(I.Teachers[To], c)] for To in I.tt_together[T])
+                            sum(M.tc[(In.Teachers[To], c)] for To in In.tt_together[T])
                             == 0
                         ).OnlyEnforceIf(hit_other.Not())
                         model.AddBoolAnd([hit_self, hit_other]).OnlyEnforceIf(success)
@@ -1737,7 +1740,7 @@ class Model:
                     nobody = model.NewBoolVar("")
                     model.Add(sum(success_list) == 0).OnlyEnforceIf(nobody)
                     model.Add(sum(success_list) >= 1).OnlyEnforceIf(nobody.Not())
-                    if not I.tt_together[T]:
+                    if not In.tt_together[T]:
                         debug(
                             f"teach_together: no preference => no penalty for {T}"
                         )  # TODO
@@ -1753,21 +1756,17 @@ class Model:
                         self.penalties["teacher"][T]["special"] = p_special
 
             elif name == "courses_closed":  # penalty if too little courses are opened
-                penalties_courses_closed = []
                 total_courseslots = 4 * 3 * 2  # days, times, rooms
-                n_active = model.NewIntVar(0, total_courseslots, "")
                 n_closed = model.NewIntVar(0, total_courseslots, "")
                 model.Add(n_closed == total_courseslots - sum(M.c_active))
-                # w = I.PENALTIES["courses_closed"]
+                # w = In.PENALTIES["courses_closed"]
                 # p_closed = model.NewIntVar(0, total_courseslots * w, "")
                 self.penalties["courses_closed"] = n_closed
 
             elif name == "student":  # penalty if student cannot attend desired course
                 self.penalties["student"] = {}
-                total_student = coeff
 
-                penalties_stud_bad = []
-                for S, val in I.input_data.items():
+                for S, val in In.input_data.items():
                     if val["type"] != "student":
                         debug(f"stud_bad: skipping {S}, not a student")
                         continue
@@ -1786,29 +1785,29 @@ class Model:
                     penalties_student = {}
                     for C in val["courses_attend"]:
                         Cs = [
-                            Cspec for Cspec in I.courses if I.is_course_type(Cspec, C)
+                            Cspec for Cspec in In.courses if In.is_course_type(Cspec, C)
                         ]
                         if not Cs:
                             error(f"stud_bad: no specific course found for {C}")
                             continue
                         slots_available = [
-                            s for s in range(len(I.slots)) if val["slots"][s] != 0
+                            s for s in range(len(In.slots)) if val["slots"][s] != 0
                         ]
                         course_cannot = model.NewBoolVar("")
                         model.Add(
                             sum(
-                                M.src[(s, r, I.Courses[CC])]
+                                M.src[(s, r, In.Courses[CC])]
                                 for s in slots_available
-                                for r in range(len(I.rooms))
+                                for r in range(len(In.rooms))
                                 for CC in Cs
                             )
                             == 0
                         ).OnlyEnforceIf(course_cannot)
                         model.Add(
                             sum(
-                                M.src[(s, r, I.Courses[CC])]
+                                M.src[(s, r, In.Courses[CC])]
                                 for s in slots_available
-                                for r in range(len(I.rooms))
+                                for r in range(len(In.rooms))
                                 for CC in Cs
                             )
                             >= 1
@@ -1821,84 +1820,13 @@ class Model:
                         error(f"No student penalties for {S}")
                     self.penalties["student"][S] = penalties_student
 
-        #                penalties[name] = penalties_stud_bad
-        #                def analysis(R):
-        #                    src = R.src
-        #                    tc = R.tc
-        #                    result = []
-        #                    total_bad = 0
-        ##                    total_open = 0
-        #                    total_ok = 0
-        #                    courses_bad_stats = {}
-        #                    courses_ok_stats = {}
-        #                    for S, val in I.input_data.items():
-        #                        if val["type"] != "student":
-        #                            debug(f"analysis stud_bad: skipping {S}, not a student")
-        #                            continue
-        #                        debug(f"analysis stud_bad: student {S}")
-        #                        who = f"{S}"
-        #                        if "provided_id" in val:
-        #                            who += f"({val['provided_id']})"
-        #                            debug(f"analysis stud_bad: provided_id '{val['provided_id']}'")
-        #                        else:
-        #                            debug(f"analysis stud_bad: no id provided")
-        #                        courses_bad = []
-        ##                        courses_na_open = []
-        #                        courses_ok = []
-        #                        slots_available = [s for s in range(len(I.slots)) if val["slots"][s] != 0]
-        #                        debug(f"analysis stud_bad: slots_available: {slots_available}")
-        #                        for C in val["courses_attend"]:
-        #                            Cs = [Cspec for Cspec in I.courses if I.is_course_type(Cspec, C)]
-        #                            if not Cs:
-        #                                warn(f"analysis stud_bad: no specific course found for {C}")
-        #                                continue
-        #                            debug(f"analysis stud_bad: specific courses: {', '.join(Cs)}")
-        #                            if sum(src[(s,r,I.Courses[CC])] for s in slots_available for r in range(len(I.rooms)) for CC in Cs) == 0:
-        #                                courses_bad.append(C)
-        #                                total_bad += 1
-        #                                if C in courses_bad_stats:
-        #                                    courses_bad_stats[C] += 1
-        #                                else:
-        #                                    courses_bad_stats[C] = 1
-        #
-        ##                                if any([CCC in I.courses_must_open for CCC in Cs]):
-        ##                                    # FIXME: this looks like a bad attempt to get active courses, use c_active
-        ##                                    courses_na_open.append(C)
-        ##                                    total_open += 1
-        #                            else:
-        #                                courses_ok.append(C)
-        #                                total_ok += 1
-        #                                if C in courses_ok_stats:
-        #                                    courses_ok_stats[C] += 1
-        #                                else:
-        #                                    courses_ok_stats[C] = 1
-        ##                        if courses_na_open:
-        #                        if courses_bad:
-        #                            debug(f"analysis stud_bad: courses_bad: {who}: {', '.join(courses_bad)}")
-        ##                            debug(f"analysis stud_bad: courses_na_open: {who}: {', '.join(courses_na_open)}")
-        ##                            result.append(f"{who} [{', '.join(courses_na_open)}]")
-        #                            result.append(f"{who} [{', '.join(courses_bad)}]")
-        #                        if courses_ok:
-        #                            debug(f"analysis stud_bad: courses OK: {who}: {', '.join(courses_ok)}")
-        #                    debug(f"Students missed:\n{pprint.pformat(result)}")
-        #                    courses_bad_stats_view = sorted( ((v,k) for k,v in courses_bad_stats.items()), reverse=True)
-        #                    result = [f"{k} ({v})" for v,k in courses_bad_stats_view] # FIXME
-        #                    debug(f"Students missed statistics:\n{pprint.pformat(courses_bad_stats_view)}")
-        #                    courses_ok_stats_view = sorted( ((v,k) for k,v in courses_ok_stats.items()), reverse=True)
-        #                    debug(f"Students ok statistics:\n{pprint.pformat(courses_ok_stats_view)}")
-        ##                    debug(f"analysis stud_bad: total missed: {total_bad}, open missed: {total_open}, total OK: {total_ok}")
-        #                    debug(f"analysis stud_bad: total missed: {total_bad}, total OK: {total_ok}")
-        #                    return result
-        #                penalties_analysis[name] = analysis
-
-        # self.penalties = penalties
         self.penalties_analysis = penalties_analysis
 
         debug("Model: penalties initialized")
 
     # finalize penalties
     def final_penalties(self):
-        I = self.I
+        In = self.In
         model = self.model
 
         penalties_values = []
@@ -1911,30 +1839,30 @@ class Model:
                 for S, dict_penalties in d.items():
                     penalties_students.append(sum(dict_penalties.values()))
                 penalty_students_weighted = model.NewIntVar(
-                    0, len(d) * I.PENALTIES["student"] * 100, ""
+                    0, len(d) * In.PENALTIES["student"] * 100, ""
                 )
                 model.Add(
                     penalty_students_weighted
-                    == sum(penalties_students) * I.PENALTIES["student"]
+                    == sum(penalties_students) * In.PENALTIES["student"]
                 )
-                # penalty_students_weighted = sum(penalties_students) * I.PENALTIES["student"]
+                # penalty_students_weighted = sum(penalties_students) * In.PENALTIES["student"]
                 penalty_students_adjusted = model.NewIntVar(
-                    0, len(d) * I.PENALTIES["student"], ""
+                    0, len(d) * In.PENALTIES["student"], ""
                 )
                 model.AddDivisionEquality(
                     penalty_students_adjusted, penalty_students_weighted, 100
                 )
                 penalties_values.append(penalty_students_adjusted)
             elif top == "courses_closed":
-                penalties_values.append(d * I.PENALTIES["courses_closed"])
+                penalties_values.append(d * In.PENALTIES["courses_closed"])
             elif top == "heavy":
-                penalties_values.append(sum(d.values()) * I.PENALTIES["heavy"])
+                penalties_values.append(sum(d.values()) * In.PENALTIES["heavy"])
             elif top == "very_heavy":
-                penalties_values.append(sum(d.values()) * I.PENALTIES["very_heavy"])
+                penalties_values.append(sum(d.values()) * In.PENALTIES["very_heavy"])
             elif top == "custom":
-                penalties_values.append(sum(d.values()) * I.PENALTIES["custom"])
+                penalties_values.append(sum(d.values()) * In.PENALTIES["custom"])
             elif top == "nice":
-                penalties_values.append(sum(d.values()) * I.PENALTIES["nice"])
+                penalties_values.append(sum(d.values()) * In.PENALTIES["nice"])
             else:
                 error(f"Unknown penalty domain: {top}")
 
@@ -1986,92 +1914,92 @@ class Model:
 
     # INNER CLASS
     class ContinuousSolutionPrinter(cp_model.CpSolverSolutionCallback):
-        def __init__(self, M, I):
+        def __init__(self, M, In):
             self.count = 0
             self.M = M
-            self.I = I
+            self.In = In
             cp_model.CpSolverSolutionCallback.__init__(self)
 
         def OnSolutionCallback(self):
-            I = self.I
+            In = self.In
             M = self.M
             R = Result()
             self.count += 1
             R.src = {}
-            for s in range(len(I.slots)):
-                for r in range(len(I.rooms)):
-                    for c in range(len(I.courses)):
+            for s in range(len(In.slots)):
+                for r in range(len(In.rooms)):
+                    for c in range(len(In.courses)):
                         R.src[(s, r, c)] = self.Value(M.src[(s, r, c)])
             debug(pprint.pformat(R))
             R.tc = {}
             R.tc_lead = {}
             R.tc_follow = {}
-            for t in range(len(I.teachers)):
-                for c in range(len(I.courses)):
+            for t in range(len(In.teachers)):
+                for c in range(len(In.courses)):
                     R.tc[(t, c)] = self.Value(M.tc[(t, c)])
                     R.tc_lead[(t, c)] = self.Value(M.tc_lead[(t, c)])
                     R.tc_follow[(t, c)] = self.Value(M.tc_follow[(t, c)])
-            for P in I.people:
-                p = I.Teachers[P]  # FIXME
-                teach_courses = [
-                    I.courses[c]
-                    for c in range(len(I.courses))
-                    if self.Value(M.tc[(p, c)])
-                ]
-                ta_courses = [
-                    I.courses[c]
-                    for c in range(len(I.courses))
-                    if self.Value(M.pc[(p, c)])
-                ]
-                attend_courses = list(set(ta_courses) - set(teach_courses))
+            for P in In.people:
+                p = In.Teachers[P]  # FIXME
+                # teach_courses = [
+                #    In.courses[c]
+                #    for c in range(len(In.courses))
+                #    if self.Value(M.tc[(p, c)])
+                # ]
+                # ta_courses = [
+                #    In.courses[c]
+                #    for c in range(len(In.courses))
+                #    if self.Value(M.pc[(p, c)])
+                # ]
+                # attend_courses = list(set(ta_courses) - set(teach_courses))
                 # debug(f"PSPD: {P} teaches {', '.join(teach_courses)}")
                 # debug(f"PSPD: {P} attends {', '.join(attend_courses)}")
                 # debug(f"PSPD: {P} teaches or attends {', '.join(ta_courses)}")
                 na = "".join(
                     [
                         "1" if self.Value(M.ps_na[(p, s)]) else "0"
-                        for s in range(len(I.slots))
+                        for s in range(len(In.slots))
                     ]
                 )
-                ps = "".join(
-                    [
-                        "1" if self.Value(M.ps[(p, s)]) else "0"
-                        for s in range(len(I.slots))
-                    ]
-                )
+                #     ps = "".join(
+                #         [
+                #             "1" if self.Value(M.ps[(p, s)]) else "0"
+                #             for s in range(len(In.slots))
+                #         ]
+                #     )
                 ts = "".join(
                     [
                         "1" if self.Value(M.ts[(p, s)]) else "0"
-                        for s in range(len(I.slots))
+                        for s in range(len(In.slots))
                     ]
                 )
                 os = "".join(
                     [
                         "1" if self.Value(M.ps_occupied[(p, s)]) else "0"
-                        for s in range(len(I.slots))
+                        for s in range(len(In.slots))
                     ]
                 )
                 # for s in range(len(slots)):
-                # debug(f"sum(self.Value(M.cs[(I.Courses[C],s)]) for C in attend_courses)")
-                As = "".join(
-                    [
-                        "1"
-                        if any(
-                            [
-                                self.Value(M.cs[(I.Courses[C])]) == s
-                                for C in attend_courses
-                            ]
-                        )
-                        else "0"
-                        for s in range(len(I.slots))
-                    ]
-                )
-                days = "".join(
-                    [
-                        "1" if self.Value(M.pd[(p, d)]) else "0"
-                        for d in range(len(I.days))
-                    ]
-                )
+                # debug(f"sum(self.Value(M.cs[(In.Courses[C],s)]) for C in attend_courses)")
+                #    As = "".join(
+                #        [
+                #            "1"
+                #            if any(
+                #                [
+                #                    self.Value(M.cs[(In.Courses[C])]) == s
+                #                    for C in attend_courses
+                #                ]
+                #            )
+                #            else "0"
+                #            for s in range(len(In.slots))
+                #        ]
+                #    )
+                #    days = "".join(
+                #        [
+                #            "1" if self.Value(M.pd[(p, d)]) else "0"
+                #            for d in range(len(In.days))
+                #        ]
+                #    )
                 debug(f"PSPD: na {na}")
                 debug(f"PSPD: os {os}")
                 debug(f"PSPD: ts {ts}")
@@ -2079,7 +2007,7 @@ class Model:
                 # debug(f"PSPD: ps {ps}")
                 # debug(f"ps/pd analysis: {P :<9} os {os} ts {ts} as {As} ps {ps} na {na} num {self.Value(M.occupied_num[p])} days {days}")
             #                m += " slots "
-            #                for s in range(len(I.slots)):
+            #                for s in range(len(In.slots)):
             #                    if self.Value(M.ps[(p,s)]):
             #                        m += "1"
             #                    else:
@@ -2087,7 +2015,7 @@ class Model:
             #                m += " num "
             #                m += f"{self.Value(M.occupied_num[p])}"
             #                m += " days "
-            #                for d in range(len(I.days)):
+            #                for d in range(len(In.days)):
             #                    if self.Value(M.pd[(p,d)]):
             #                        m += "1"
             #                    else:
@@ -2096,18 +2024,18 @@ class Model:
             debug("Courses openness and indices")
             R.c_active = []
             R.cs = []
-            for c in range(len(I.courses)):
+            for c in range(len(In.courses)):
                 R.c_active.append(self.Value(M.c_active[c]))
                 debug(
-                    f"{I.courses[c]: <30}: {self.Value(M.c_active[c])} {self.Value(M.cs[c])}"
+                    f"{In.courses[c]: <30}: {self.Value(M.c_active[c])} {self.Value(M.cs[c])}"
                 )
                 R.cs.append(self.Value(M.cs[c]))
             R.penalties = M.penalties
             #            R.penalties = {}
             #            # FIXME how to access penalties?
-            #            for (name, l) in M.penalties.items():
-            #                v = sum([self.Value(p) for p in l])
-            #                coeff = I.PENALTIES[name]
+            #            for (name, ls) in M.penalties.items():
+            #                v = sum([self.Value(p) for p in ls])
+            #                coeff = In.PENALTIES[name]
             #                R.penalties[name] = (coeff, v)
             #            R.custom_penalties = {}
             #            for name, v in M.custom_penalties.items():
@@ -2128,70 +2056,70 @@ class Model:
                 penalties = R.penalties
                 if objective:
                     print(f"Objective value: {objective}")
-                for s in range(len(I.slots)):
-                    for r in range(len(I.rooms)):
-                        for c in range(len(I.courses)):
+                for s in range(len(In.slots)):
+                    for r in range(len(In.rooms)):
+                        for c in range(len(In.courses)):
                             if src[(s, r, c)]:
                                 Ts = []
-                                if I.courses[c] in I.courses_open:
+                                if In.courses[c] in In.courses_open:
                                     Ts.append("OPEN")
-                                elif I.courses[c] in I.courses_solo:
-                                    for t in range(len(I.teachers)):
+                                elif In.courses[c] in In.courses_solo:
+                                    for t in range(len(In.teachers)):
                                         # if solver.Value(tc[(t,c)]):
                                         if tc[(t, c)]:
-                                            Ts.append(I.teachers[t])
+                                            Ts.append(In.teachers[t])
                                             break
-                                elif I.courses[c] in I.courses_regular:
+                                elif In.courses[c] in In.courses_regular:
                                     # t_lead = "UNKNOWN"
                                     # t_follow = "UNKNOWN"
-                                    for t in range(len(I.teachers)):
+                                    for t in range(len(In.teachers)):
                                         if tc_lead[(t, c)]:
                                             t_lead = t
                                         if tc_follow[(t, c)]:
                                             t_follow = t
-                                    Ts.append(I.teachers[t_lead])
-                                    Ts.append(I.teachers[t_follow])
-                                # if len(Ts) == 2 and (Ts[0] in I.teachers_follow or Ts[1] in I.teachers_lead):
+                                    Ts.append(In.teachers[t_lead])
+                                    Ts.append(In.teachers[t_follow])
+                                # if len(Ts) == 2 and (Ts[0] in In.teachers_follow or Ts[1] in In.teachers_lead):
                                 # Ts[0], Ts[1] = Ts[1], Ts[0]
                                 if len(Ts) == 2:
                                     Ts_print = f"{Ts[0]:<10}+ {Ts[1]}"
                                 else:
                                     Ts_print = f"{Ts[0]}"
-                                # print(f"{I.slots[s]: <11}{I.rooms[r]: <5}{'+'.join(Ts): <19}{I.courses[c]}")
+                                # print(f"{In.slots[s]: <11}{In.rooms[r]: <5}{'+'.join(Ts): <19}{In.courses[c]}")
                                 print(
-                                    f"  {I.slots[s]: <11}{I.rooms[r]: <4}{Ts_print: <21}{I.courses[c]}"
+                                    f"  {In.slots[s]: <11}{In.rooms[r]: <4}{Ts_print: <21}{In.courses[c]}"
                                 )
                 if penalties:
                     print("PENALTIES:")
                     total = 0
 
                     n_heavy = 0
-                    l = []
-                    w = I.PENALTIES["heavy"]
+                    ls = []
+                    w = In.PENALTIES["heavy"]
                     for name, v in penalties["heavy"].items():
                         y = self.Value(v)  # TODO
                         if y != 0:
                             n_heavy += y
-                            l.append(name)
-                    if not l:
-                        l.append("none")
+                            ls.append(name)
+                    if not ls:
+                        ls.append("none")
                     total_heavy = n_heavy * w
-                    print(f"Heavy ({n_heavy}*{w}={total_heavy}): {', '.join(l)}")
+                    print(f"Heavy ({n_heavy}*{w}={total_heavy}): {', '.join(ls)}")
                     total += total_heavy
 
                     n_very_heavy = 0
-                    l = []
-                    w = I.PENALTIES["very_heavy"]
+                    ls = []
+                    w = In.PENALTIES["very_heavy"]
                     for name, v in penalties["very_heavy"].items():
                         y = self.Value(v)  # TODO
                         if y != 0:
                             n_very_heavy += y
-                            l.append(name)
-                    if not l:
-                        l.append("none")
+                            ls.append(name)
+                    if not ls:
+                        ls.append("none")
                     total_very_heavy = n_very_heavy * w
                     print(
-                        f"VERY Heavy ({n_very_heavy}*{w}={total_very_heavy}): {', '.join(l)}"
+                        f"VERY Heavy ({n_very_heavy}*{w}={total_very_heavy}): {', '.join(ls)}"
                     )
                     total += total_very_heavy
 
@@ -2200,16 +2128,16 @@ class Model:
                     teachers_happy = []
                     # FIXME
                     for T, d in penalties["teacher"].items():
-                        l = []
+                        ls = []
                         s = 0
                         for p, v in d.items():
                             y = self.Value(v)  # TODO have all values in R?
                             if y > 0:
                                 total_teachers += y
-                                l.append((p, y))
+                                ls.append((p, y))
                                 s += y
                         if s:
-                            details = ", ".join([f"{x[0]}:{x[1]}" for x in l])
+                            details = ", ".join([f"{x[0]}:{x[1]}" for x in ls])
                             print(f" * {T}: {s} // {details}")
                         else:
                             debug(f" * {T} is happy")
@@ -2221,37 +2149,37 @@ class Model:
                     total += total_teachers
 
                     n_closed = self.Value(penalties["courses_closed"])
-                    w = I.PENALTIES["courses_closed"]
+                    w = In.PENALTIES["courses_closed"]
                     total_closed = n_closed * w
                     print(f"Closed courses: {n_closed}*{w}={total_closed}")
                     total += total_closed
 
                     n_custom = 0
-                    l = []
-                    w = I.PENALTIES["custom"]
+                    ls = []
+                    w = In.PENALTIES["custom"]
                     for name, v in penalties["custom"].items():
                         y = self.Value(v)  # TODO
                         if y != 0:
                             n_custom += y
-                            l.append(name)
-                    if not l:
-                        l.append("none")
+                            ls.append(name)
+                    if not ls:
+                        ls.append("none")
                     total_custom = n_custom * w
-                    print(f"Custom ({n_custom}*{w}={total_custom}): {', '.join(l)}")
+                    print(f"Custom ({n_custom}*{w}={total_custom}): {', '.join(ls)}")
                     total += total_custom
 
                     n_nice = 0
-                    l = []
-                    w = I.PENALTIES["nice"]
+                    ls = []
+                    w = In.PENALTIES["nice"]
                     for name, v in penalties["nice"].items():
                         y = self.Value(v)  # TODO
                         if y != 0:
                             n_nice += y
-                            l.append(name)
-                    if not l:
-                        l.append("none")
+                            ls.append(name)
+                    if not ls:
+                        ls.append("none")
                     total_nice = n_nice * w
-                    print(f"Nice: ({n_nice}*{w}={total_nice}): {', '.join(l)}")
+                    print(f"Nice: ({n_nice}*{w}={total_nice}): {', '.join(ls)}")
                     total += total_nice
 
                     print("Students:")
@@ -2260,7 +2188,7 @@ class Model:
                     happiness_count = 0
                     students_hh = {}  # Happiness Histogram
                     for S, d in penalties["student"].items():
-                        l = []
+                        ls = []
                         s = 0
                         courses_wanted = 0
                         courses_bad = 0
@@ -2270,7 +2198,7 @@ class Model:
                             if y > 0:
                                 courses_bad += 1
                                 total_students += y
-                                l.append((p, y))
+                                ls.append((p, y))
                                 s += y
                         courses_good = courses_wanted - courses_bad
                         happiness = int(courses_good / courses_wanted * 100)
@@ -2284,7 +2212,7 @@ class Model:
                         print(
                             f" * {v:>3}%: {len(students_hh[v]):>3} ({' '.join(students_hh[v])})"
                         )
-                    total_students = total_students * I.PENALTIES["student"] // 100
+                    total_students = total_students * In.PENALTIES["student"] // 100
                     if happiness_count:
                         print(
                             f"Students total: {total_students} ({happiness_sum // happiness_count}%)"
@@ -2294,10 +2222,12 @@ class Model:
                 if utilization:
                     print("UTILIZATION:")
                     tn = {}
-                    # for t in range(len(I.teachers)):
-                    # tn[I.teachers[t]] = sum(tc[t,c] for c in range(len(I.courses)))
-                    for T in I.teachers:
-                        tn[T] = sum(tc[I.Teachers[T], c] for c in range(len(I.courses)))
+                    # for t in range(len(In.teachers)):
+                    # tn[In.teachers[t]] = sum(tc[t,c] for c in range(len(In.courses)))
+                    for T in In.teachers:
+                        tn[T] = sum(
+                            tc[In.Teachers[T], c] for c in range(len(In.courses))
+                        )
                     for v in sorted(set(tn.values())):
                         print(f"{v}: {', '.join(t for t in tn if tn[t] == v)}")
                 print(f"TOTAL: {total}")
@@ -2318,7 +2248,7 @@ class Model:
         solver = cp_model.CpSolver()
         # solver.parameters.max_time_in_seconds = 20.0
         status = solver.SolveWithSolutionCallback(
-            self.model, self.ContinuousSolutionPrinter(self, self.I)
+            self.model, self.ContinuousSolutionPrinter(self, self.In)
         )
         statusname = solver.StatusName(status)
         print(
