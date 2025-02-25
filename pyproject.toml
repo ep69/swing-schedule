@@ -8,6 +8,12 @@ dependencies = [
     "ortools >= 9.12",
 ]
 
+[project.urls]
+Repository = "https://github.com/ep69/swing-schedule"
+
+[project.scripts]
+"swing_schedule" = "swing_schedule:main"
+
 [dependency-groups]
 dev = [
     "ruff >= 0.9.7",
