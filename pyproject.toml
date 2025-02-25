@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "ortools >= 9.12",
-    "regex >= 2024.11.6",
 ]
 
 [dependency-groups]

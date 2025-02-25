@@ -4,7 +4,7 @@ import sys
 import csv
 import argparse
 import pprint
-import regex
+import re
 
 from ortools.sat.python import cp_model
 
@@ -250,7 +250,7 @@ class Input:
             "Balboa Beg",
             "Saint Louis Shag Beg",
         ]
-        Cspec = regex.sub(" /[A-Za-z0-9-]+$", "", Cspecn)
+        Cspec = re.sub(" /[A-Za-z0-9-]+$", "", Cspecn)
         result = None
         if Cspec.endswith("English"):
             result = Cgen == Cspec
