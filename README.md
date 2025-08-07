@@ -4,12 +4,12 @@ Generates schedules for schools teaching partner dances.
 
 ## Install
 
-You need `python3` to use this tool. Other than that, only `OR-Tools` are needed:
+You need `python3` and `pip` to use this tool.
 ```
-python3 -m pip install --upgrade --user -r requirements.txt
+python3 -m pip install --extra-index-url https://test.pypi.org/simple/ swing-schedule
 ```
 
 ## Run
 ```
-python3 swing_schedule/swing_schedule.py -t data/teachers.csv
+swing-schedule -t /usr/local/lib/python*/site-packages/swing_schedule/data/teachers.csv
 ```
