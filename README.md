@@ -6,10 +6,10 @@ Generates schedules for schools teaching partner dances.
 
 You need `python3` and `pip` to use this tool.
 ```
-python3 -m pip install --extra-index-url https://test.pypi.org/simple/ swing-schedule
+python3 -m pip install --upgrade --user swing-schedule
 ```
 
 ## Run
 ```
-swing-schedule -t /usr/local/lib/python*/site-packages/swing_schedule/data/teachers.csv
+swing-schedule -t ~/.local/lib/python*/site-packages/swing_schedule/data/teachers.csv
 ```

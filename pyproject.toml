@@ -1,6 +1,6 @@
 [project]
 name = "swing-schedule"
-version = "0.1.0"
+version = "0.1.1"
 description = "Swing Dance Schedule Generator"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -20,18 +20,10 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.9.5,<0.10.0"]
+build-backend = "uv_build"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/swing_schedule"]
+[tool.uv.build-backend.data]
+data = "data"
 
-[tool.hatch.build.targets.wheel.force-include]
-"data/teachers.csv" = "swing_schedule/data/teachers.csv"
-
-[tool.hatch.build.targets.sdist]
-exclude = [
-    "data/*",
-]
-[tool.hatch.build.targets.sdist.force-include]
-"data/teachers.csv" = "data/teachers.csv"
+#[tool.uv.build-backend.data]
