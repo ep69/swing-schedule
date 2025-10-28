@@ -5,7 +5,7 @@ description = "Swing Dance Schedule Generator"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "ortools >= 9.12",
+    "ortools>=9.14.6206",
 ]
 
 [project.urls]
@@ -16,7 +16,7 @@ Repository = "https://github.com/ep69/swing-schedule"
 
 [dependency-groups]
 dev = [
-    "ruff >= 0.9.7",
+    "ruff>=0.14.2",
 ]
 
 [build-system]
