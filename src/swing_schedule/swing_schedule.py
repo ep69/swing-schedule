@@ -116,19 +116,26 @@ class Input:
         self.courses_solo = [
             "Solo Int",
         ]
+        self.courses_threesome = [
+            "Blues Solo",
+        ]
         self.courses_regular = [
             "LH Newbies /1",
             "LH Newbies /2",
             # "LH Newbies /3",
-            "LH Beg /BottomsUp",
             "LH Beg /Riff",
+            "LH Beg /New1",
+            "LH Beg /New2",
+            "LH Beg /Charleston 6week",  # special course
+            "LH Beg/Int /FastDancing 6week",  # special course
+            "LH Beg/Int /BottomsUp",
             "LH Beg/Int /JiveAtFive",
-            "LH Beg/Int /Sandu",
             "LH Beg/Int /SureThing",
-            "LH Int /SmoothOne",
+            "LH Int /Sandu",
             "LH Int /Perdido",
             # "LH Int /BasieBeat",
             # "LH Int /6weeks",
+            "LH Int/Adv /SmoothOne",
             "LH Int/Adv",
             "LH Adv",
             # "Airsteps 1",
@@ -140,7 +147,6 @@ class Input:
             "Balboa Int",
             "Blues Beg",
             "Blues Int",
-            "Blues Solo",
         ]
         self.COURSES_IGNORE = [
             "Solo Beg",
@@ -157,6 +163,8 @@ class Input:
                 self.courses_open.append(C)
             elif typ == "solo":
                 self.courses_solo.append(C)
+            elif typ == "threesome":
+                self.courses_threesome.append(C)
             elif typ == "regular":
                 self.courses_regular.append(C)
             else:
@@ -165,11 +173,20 @@ class Input:
         debug(f"init_constants: courses_open: {', '.join(self.courses_open)}")
         self.courses_solo = list(set(self.courses_solo) - set(self.COURSES_IGNORE))
         debug(f"init_constants: courses_solo: {', '.join(self.courses_solo)}")
+        self.courses_threesome = list(
+            set(self.courses_threesome) - set(self.COURSES_IGNORE)
+        )
+        debug(f"init_constants: courses_threesome: {', '.join(self.courses_threesome)}")
         self.courses_regular = list(
             set(self.courses_regular) - set(self.COURSES_IGNORE)
         )
         debug(f"init_constants: courses_regular: {', '.join(self.courses_regular)}")
-        self.courses = self.courses_regular + self.courses_solo + self.courses_open
+        self.courses = (
+            self.courses_regular
+            + self.courses_solo
+            + self.courses_threesome
+            + self.courses_open
+        )
         debug(f"init_constants: courses: {', '.join(self.courses)}")
         self.Courses = {}
         for i, c in enumerate(self.courses):
@@ -238,7 +255,7 @@ class Input:
                 and Cgen.startswith("Blues Int")
             )
             or (Cspecn.startswith("Blues Solo") and Cgen.startswith("Blues Int"))
-            or False
+            # or False
         ):
             return True
 
@@ -712,7 +729,11 @@ class Input:
                 courses_pref = {}
                 for Cgen, v in courses_teach_primary.items():
                     # debug(f"Cgen: {Cgen}")
-                    for Cspec in self.courses_regular + self.courses_solo:
+                    for Cspec in (
+                        self.courses_regular
+                        + self.courses_solo
+                        + self.courses_threesome
+                    ):
                         # debug(f"Cspec 1: {Cspec}")
                         if self.is_course_type(Cspec, Cgen):
                             # debug(f"Cspec 2: {Cspec}")
@@ -736,12 +757,16 @@ class Input:
                                             )
                                     else:
                                         error(f"No primary role for teacher {T}")
-                                elif Cspec in self.courses_solo:
+                                elif Cspec in (
+                                    self.courses_solo + self.courses_threesome
+                                ):
                                     if T in self.ct_possible[Cspec]:
                                         self.ct_possible[Cspec].remove(T)
                                         assert T not in self.ct_possible[Cspec]
                                 else:
-                                    error(f"Course {Cspec} is neither regular nor solo")
+                                    error(
+                                        f"Course {Cspec} is neither regular nor solo/threesome"
+                                    )
                             elif v <= 3:
                                 pass
                             else:
@@ -781,7 +806,7 @@ class Input:
             self.ts_pref[T] = data["slots"]
             assert len(self.ts_pref[T]) == len(self.slots)
         debug("CT_POSSIBLE:")
-        for C in self.courses_regular + self.courses_solo:
+        for C in self.courses_regular + self.courses_solo + self.courses_threesome:
             debug(f"ct_possible {C}: {', '.join(self.ct_possible[C])}")
             if C in self.courses_regular:
                 debug(f"ct_possible_lead {C}: {', '.join(self.ct_possible_lead[C])}")
@@ -1263,6 +1288,13 @@ class Model:
                 model.Add(
                     sum(self.tc[(In.Teachers[T], c)] for T in In.teachers) == 0
                 ).OnlyEnforceIf(self.c_active[c].Not())
+            elif In.courses[c] in In.courses_threesome:
+                model.Add(
+                    sum(self.tc[(In.Teachers[T], c)] for T in In.teachers) == 3
+                ).OnlyEnforceIf(self.c_active[c])
+                model.Add(
+                    sum(self.tc[(In.Teachers[T], c)] for T in In.teachers) == 0
+                ).OnlyEnforceIf(self.c_active[c].Not())
             elif In.courses[c] in In.courses_open:
                 model.Add(sum(self.tc[(In.Teachers[T], c)] for T in In.teachers) == 0)
             else:
@@ -1679,7 +1711,9 @@ class Model:
                     # teacher T strongly prefers some courses over others
                     courses_bad = [
                         C
-                        for C in In.courses_regular + In.courses_solo
+                        for C in In.courses_regular
+                        + In.courses_solo
+                        + In.courses_threesome
                         if In.tc_pref[T].get(C, -1) == 1
                     ]
                     p_course_bad = model.NewIntVar(0, icw["bad_course"] * 10, "")
@@ -1696,7 +1730,9 @@ class Model:
                     # no_perfect
                     courses_perfect = [
                         C
-                        for C in In.courses_regular + In.courses_solo
+                        for C in In.courses_regular
+                        + In.courses_solo
+                        + In.courses_threesome
                         if In.tc_pref[T].get(C, -1) == 3
                     ]
                     p_no_perfect = model.NewIntVar(0, icw["no_perfect"], "")
@@ -2044,7 +2080,7 @@ class Model:
             #            for name, v in M.heavy_penalties.items():
             #                R.heavy_penalties[name] = self.Value(v)
             print(f"No: {self.count}")
-            print(f"Wall time: {self.WallTime()}")
+            print(f"Wall time: {self.WallTime():.1f}s")
 
             # print(f"Branches: {self.NumBranches()}")
             # print(f"Conflicts: {self.NumConflicts()}")
@@ -2069,6 +2105,12 @@ class Model:
                                         if tc[(t, c)]:
                                             Ts.append(In.teachers[t])
                                             break
+                                elif In.courses[c] in In.courses_threesome:
+                                    for t in range(len(In.teachers)):
+                                        # if solver.Value(tc[(t,c)]):
+                                        if tc[(t, c)]:
+                                            Ts.append(In.teachers[t])
+                                    assert len(Ts) == 3
                                 elif In.courses[c] in In.courses_regular:
                                     # t_lead = "UNKNOWN"
                                     # t_follow = "UNKNOWN"
@@ -2083,6 +2125,8 @@ class Model:
                                 # Ts[0], Ts[1] = Ts[1], Ts[0]
                                 if len(Ts) == 2:
                                     Ts_print = f"{Ts[0]:<10}+ {Ts[1]}"
+                                elif len(Ts) == 3:
+                                    Ts_print = f"{Ts[0]}+{Ts[1]}+{Ts[2]}"  # TODO
                                 else:
                                     Ts_print = f"{Ts[0]}"
                                 # print(f"{In.slots[s]: <11}{In.rooms[r]: <5}{'+'.join(Ts): <19}{In.courses[c]}")
