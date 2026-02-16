@@ -128,7 +128,7 @@ class Input:
             "LH Beg /BigShoe",
             "LH Beg /New",
             "LH Beg /Fox",
-            #"LH Beg /Charleston 6week",  # special course
+            # "LH Beg /Charleston 6week",  # special course
             "LH Beg/Int /FastDancing 6week",  # special course
             "LH Beg/Int /BottomsUp",
             "LH Beg/Int /JiveAtFive",
@@ -1963,13 +1963,12 @@ class Model:
             print_solution(self, self.M, self.In)
             return
 
-
     def solve(self):
         if VERBOSE:
             self.print_stats()
             print()
         else:
-            info(f"Solving...")
+            info("Solving...")
 
         solver = cp_model.CpSolver()
         # solver.parameters.max_time_in_seconds = 20.0
@@ -1981,8 +1980,8 @@ class Model:
             status = solver.Solve(self.model)
             print("SOLVED")
             print_solution(solver, self, self.In)
-            #x = self.ContinuousSolutionPrinter(self, self.In)
-            #x.OnSolutionCallback()
+            # x = self.ContinuousSolutionPrinter(self, self.In)
+            # x.OnSolutionCallback()
 
         statusname = solver.StatusName(status)
         print(
@@ -1990,6 +1989,7 @@ class Model:
         )
         if statusname not in ["FEASIBLE", "OPTIMAL"]:
             error(f"Solution NOT found - status {statusname}")
+
 
 def print_solution(sol, model, input_):
     In = input_
@@ -2012,10 +2012,7 @@ def print_solution(sol, model, input_):
     for P in In.people:
         p = In.Teachers[P]  # FIXME
         na = "".join(
-            [
-                "1" if sol.Value(M.ps_na[(p, s)]) else "0"
-                for s in range(len(In.slots))
-            ]
+            ["1" if sol.Value(M.ps_na[(p, s)]) else "0" for s in range(len(In.slots))]
         )
         #     ps = "".join(
         #         [
@@ -2024,10 +2021,7 @@ def print_solution(sol, model, input_):
         #         ]
         #     )
         ts = "".join(
-            [
-                "1" if sol.Value(M.ts[(p, s)]) else "0"
-                for s in range(len(In.slots))
-            ]
+            ["1" if sol.Value(M.ts[(p, s)]) else "0" for s in range(len(In.slots))]
         )
         os = "".join(
             [
@@ -2082,9 +2076,7 @@ def print_solution(sol, model, input_):
     R.cs = []
     for c in range(len(In.courses)):
         R.c_active.append(sol.Value(M.c_active[c]))
-        debug(
-            f"{In.courses[c]: <30}: {sol.Value(M.c_active[c])} {sol.Value(M.cs[c])}"
-        )
+        debug(f"{In.courses[c]: <30}: {sol.Value(M.c_active[c])} {sol.Value(M.cs[c])}")
         R.cs.append(sol.Value(M.cs[c]))
     R.penalties = M.penalties
     #            R.penalties = {}
@@ -2288,9 +2280,7 @@ def print_solution(sol, model, input_):
             # for t in range(len(In.teachers)):
             # tn[In.teachers[t]] = sum(tc[t,c] for c in range(len(In.courses)))
             for T in In.teachers:
-                tn[T] = sum(
-                    tc[In.Teachers[T], c] for c in range(len(In.courses))
-                )
+                tn[T] = sum(tc[In.Teachers[T], c] for c in range(len(In.courses)))
             for v in sorted(set(tn.values())):
                 print(f"{v}: {', '.join(t for t in tn if tn[t] == v)}")
         print(f"TOTAL: {total}")
