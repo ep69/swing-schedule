@@ -61,7 +61,7 @@ class Input:
         self.init_teachers_form(teachers_csv, extra_courses, excluded_teachers)
         if students_csv is not None:
             self.init_students_form(students_csv)
-        info(pprint.pformat(self.input_data))
+        debug(pprint.pformat(self.input_data))
 
     courses_extra = {}
 
@@ -117,16 +117,18 @@ class Input:
             "Solo Int",
         ]
         self.courses_threesome = [
-            "Blues Solo",
+            "Solo Blues",
+            "Balboa Int",
         ]
         self.courses_regular = [
             "LH Newbies /1",
             "LH Newbies /2",
             # "LH Newbies /3",
-            "LH Beg /Riff",
-            "LH Beg /New1",
-            "LH Beg /New2",
-            "LH Beg /Charleston 6week",  # special course
+            "LH Beg/Int /Riff",
+            "LH Beg /BigShoe",
+            "LH Beg /New",
+            "LH Beg /Fox",
+            #"LH Beg /Charleston 6week",  # special course
             "LH Beg/Int /FastDancing 6week",  # special course
             "LH Beg/Int /BottomsUp",
             "LH Beg/Int /JiveAtFive",
@@ -144,16 +146,17 @@ class Input:
             "Collegiate Shag Int",
             "Balboa Beg",
             "Balboa Beg/Int",
-            "Balboa Int",
             "Blues Beg",
             "Blues Int",
         ]
         self.COURSES_IGNORE = [
             "Solo Beg",
+            "Slow Balboa",
             "Slow Balboa (2nd half)",
             "Saint Louis Shag Beg",
             "Saint Louis Shag Beg/Int",
             "Saint Louis Shag Int",
+            "Airsteps",
             "Zumba s Tomem",
         ]
         for C, d in self.courses_extra.items():
@@ -254,7 +257,7 @@ class Input:
                 Cspecn.startswith("Blues - theme course")
                 and Cgen.startswith("Blues Int")
             )
-            or (Cspecn.startswith("Blues Solo") and Cgen.startswith("Blues Int"))
+            or (Cspecn.startswith("Solo Blues") and Cgen.startswith("Blues Int"))
             # or False
         ):
             return True
@@ -795,13 +798,13 @@ class Input:
                     if d in self.input_data:
                         self.tt_not_together.append((T, d))
                     else:
-                        info(f"Inactive teacher {d} (tt_not_together), ignoring")
+                        debug(f"Inactive teacher {d} (tt_not_together), ignoring")
                 ls = []
                 for d in data["teach_together"]:
                     if d in self.input_data:
                         ls.append(d)
                     else:
-                        info(f"Inactive teacher {d} (tt_together), ignoring")
+                        debug(f"Inactive teacher {d} (tt_together), ignoring")
                 self.tt_together[T] = ls
             self.ts_pref[T] = data["slots"]
             assert len(self.ts_pref[T]) == len(self.slots)
@@ -1957,349 +1960,349 @@ class Model:
             cp_model.CpSolverSolutionCallback.__init__(self)
 
         def OnSolutionCallback(self):
-            In = self.In
-            M = self.M
-            R = Result()
-            self.count += 1
-            R.src = {}
-            for s in range(len(In.slots)):
-                for r in range(len(In.rooms)):
-                    for c in range(len(In.courses)):
-                        R.src[(s, r, c)] = self.Value(M.src[(s, r, c)])
-            debug(pprint.pformat(R))
-            R.tc = {}
-            R.tc_lead = {}
-            R.tc_follow = {}
-            for t in range(len(In.teachers)):
-                for c in range(len(In.courses)):
-                    R.tc[(t, c)] = self.Value(M.tc[(t, c)])
-                    R.tc_lead[(t, c)] = self.Value(M.tc_lead[(t, c)])
-                    R.tc_follow[(t, c)] = self.Value(M.tc_follow[(t, c)])
-            for P in In.people:
-                p = In.Teachers[P]  # FIXME
-                # teach_courses = [
-                #    In.courses[c]
-                #    for c in range(len(In.courses))
-                #    if self.Value(M.tc[(p, c)])
-                # ]
-                # ta_courses = [
-                #    In.courses[c]
-                #    for c in range(len(In.courses))
-                #    if self.Value(M.pc[(p, c)])
-                # ]
-                # attend_courses = list(set(ta_courses) - set(teach_courses))
-                # debug(f"PSPD: {P} teaches {', '.join(teach_courses)}")
-                # debug(f"PSPD: {P} attends {', '.join(attend_courses)}")
-                # debug(f"PSPD: {P} teaches or attends {', '.join(ta_courses)}")
-                na = "".join(
-                    [
-                        "1" if self.Value(M.ps_na[(p, s)]) else "0"
-                        for s in range(len(In.slots))
-                    ]
-                )
-                #     ps = "".join(
-                #         [
-                #             "1" if self.Value(M.ps[(p, s)]) else "0"
-                #             for s in range(len(In.slots))
-                #         ]
-                #     )
-                ts = "".join(
-                    [
-                        "1" if self.Value(M.ts[(p, s)]) else "0"
-                        for s in range(len(In.slots))
-                    ]
-                )
-                os = "".join(
-                    [
-                        "1" if self.Value(M.ps_occupied[(p, s)]) else "0"
-                        for s in range(len(In.slots))
-                    ]
-                )
-                # for s in range(len(slots)):
-                # debug(f"sum(self.Value(M.cs[(In.Courses[C],s)]) for C in attend_courses)")
-                #    As = "".join(
-                #        [
-                #            "1"
-                #            if any(
-                #                [
-                #                    self.Value(M.cs[(In.Courses[C])]) == s
-                #                    for C in attend_courses
-                #                ]
-                #            )
-                #            else "0"
-                #            for s in range(len(In.slots))
-                #        ]
-                #    )
-                #    days = "".join(
-                #        [
-                #            "1" if self.Value(M.pd[(p, d)]) else "0"
-                #            for d in range(len(In.days))
-                #        ]
-                #    )
-                debug(f"PSPD: na {na}")
-                debug(f"PSPD: os {os}")
-                debug(f"PSPD: ts {ts}")
-                # debug(f"PSPD: As {As}")
-                # debug(f"PSPD: ps {ps}")
-                # debug(f"ps/pd analysis: {P :<9} os {os} ts {ts} as {As} ps {ps} na {na} num {self.Value(M.occupied_num[p])} days {days}")
-            #                m += " slots "
-            #                for s in range(len(In.slots)):
-            #                    if self.Value(M.ps[(p,s)]):
-            #                        m += "1"
-            #                    else:
-            #                        m += "0"
-            #                m += " num "
-            #                m += f"{self.Value(M.occupied_num[p])}"
-            #                m += " days "
-            #                for d in range(len(In.days)):
-            #                    if self.Value(M.pd[(p,d)]):
-            #                        m += "1"
-            #                    else:
-            #                        m += "0"
-            #                debug(m)
-            debug("Courses openness and indices")
-            R.c_active = []
-            R.cs = []
-            for c in range(len(In.courses)):
-                R.c_active.append(self.Value(M.c_active[c]))
-                debug(
-                    f"{In.courses[c]: <30}: {self.Value(M.c_active[c])} {self.Value(M.cs[c])}"
-                )
-                R.cs.append(self.Value(M.cs[c]))
-            R.penalties = M.penalties
-            #            R.penalties = {}
-            #            # FIXME how to access penalties?
-            #            for (name, ls) in M.penalties.items():
-            #                v = sum([self.Value(p) for p in ls])
-            #                coeff = In.PENALTIES[name]
-            #                R.penalties[name] = (coeff, v)
-            #            R.custom_penalties = {}
-            #            for name, v in M.custom_penalties.items():
-            #                R.custom_penalties[name] = self.Value(v)
-            #            R.heavy_penalties = {}
-            #            for name, v in M.heavy_penalties.items():
-            #                R.heavy_penalties[name] = self.Value(v)
-            print(f"No: {self.count}")
-            print(f"Wall time: {self.WallTime():.1f}s")
+            print_solution(self, self.M, self.In)
+            return
 
-            # print(f"Branches: {self.NumBranches()}")
-            # print(f"Conflicts: {self.NumConflicts()}")
-            def print_solution(R, penalties_analysis, objective=None, utilization=True):
-                src = R.src
-                tc = R.tc
-                tc_lead = R.tc_lead
-                tc_follow = R.tc_follow
-                penalties = R.penalties
-                if objective:
-                    print(f"Objective value: {objective}")
-                for s in range(len(In.slots)):
-                    for r in range(len(In.rooms)):
-                        for c in range(len(In.courses)):
-                            if src[(s, r, c)]:
-                                Ts = []
-                                if In.courses[c] in In.courses_open:
-                                    Ts.append("OPEN")
-                                elif In.courses[c] in In.courses_solo:
-                                    for t in range(len(In.teachers)):
-                                        # if solver.Value(tc[(t,c)]):
-                                        if tc[(t, c)]:
-                                            Ts.append(In.teachers[t])
-                                            break
-                                elif In.courses[c] in In.courses_threesome:
-                                    for t in range(len(In.teachers)):
-                                        # if solver.Value(tc[(t,c)]):
-                                        if tc[(t, c)]:
-                                            Ts.append(In.teachers[t])
-                                    assert len(Ts) == 3
-                                elif In.courses[c] in In.courses_regular:
-                                    # t_lead = "UNKNOWN"
-                                    # t_follow = "UNKNOWN"
-                                    for t in range(len(In.teachers)):
-                                        if tc_lead[(t, c)]:
-                                            t_lead = t
-                                        if tc_follow[(t, c)]:
-                                            t_follow = t
-                                    Ts.append(In.teachers[t_lead])
-                                    Ts.append(In.teachers[t_follow])
-                                # if len(Ts) == 2 and (Ts[0] in In.teachers_follow or Ts[1] in In.teachers_lead):
-                                # Ts[0], Ts[1] = Ts[1], Ts[0]
-                                if len(Ts) == 2:
-                                    Ts_print = f"{Ts[0]:<10}+ {Ts[1]}"
-                                elif len(Ts) == 3:
-                                    Ts_print = f"{Ts[0]}+{Ts[1]}+{Ts[2]}"  # TODO
-                                else:
-                                    Ts_print = f"{Ts[0]}"
-                                # print(f"{In.slots[s]: <11}{In.rooms[r]: <5}{'+'.join(Ts): <19}{In.courses[c]}")
-                                print(
-                                    f"  {In.slots[s]: <11}{In.rooms[r]: <4}{Ts_print: <21}{In.courses[c]}"
-                                )
-                if penalties:
-                    print("PENALTIES:")
-                    total = 0
-
-                    n_heavy = 0
-                    ls = []
-                    w = In.PENALTIES["heavy"]
-                    for name, v in penalties["heavy"].items():
-                        y = self.Value(v)  # TODO
-                        if y != 0:
-                            n_heavy += y
-                            ls.append(name)
-                    if not ls:
-                        ls.append("none")
-                    total_heavy = n_heavy * w
-                    print(f"Heavy ({n_heavy}*{w}={total_heavy}): {', '.join(ls)}")
-                    total += total_heavy
-
-                    n_very_heavy = 0
-                    ls = []
-                    w = In.PENALTIES["very_heavy"]
-                    for name, v in penalties["very_heavy"].items():
-                        y = self.Value(v)  # TODO
-                        if y != 0:
-                            n_very_heavy += y
-                            ls.append(name)
-                    if not ls:
-                        ls.append("none")
-                    total_very_heavy = n_very_heavy * w
-                    print(
-                        f"VERY Heavy ({n_very_heavy}*{w}={total_very_heavy}): {', '.join(ls)}"
-                    )
-                    total += total_very_heavy
-
-                    total_teachers = 0
-                    print("Teachers:")
-                    teachers_happy = []
-                    # FIXME
-                    for T, d in penalties["teacher"].items():
-                        ls = []
-                        s = 0
-                        for p, v in d.items():
-                            y = self.Value(v)  # TODO have all values in R?
-                            if y > 0:
-                                total_teachers += y
-                                ls.append((p, y))
-                                s += y
-                        if s:
-                            details = ", ".join([f"{x[0]}:{x[1]}" for x in ls])
-                            print(f" * {T}: {s} // {details}")
-                        else:
-                            debug(f" * {T} is happy")
-                            teachers_happy.append(T)
-                    print(
-                        f" Happy teachers: ({len(teachers_happy)}) {', '.join(teachers_happy)}"
-                    )
-                    print(f"Teachers total: {total_teachers}")
-                    total += total_teachers
-
-                    n_closed = self.Value(penalties["courses_closed"])
-                    w = In.PENALTIES["courses_closed"]
-                    total_closed = n_closed * w
-                    print(f"Closed courses: {n_closed}*{w}={total_closed}")
-                    total += total_closed
-
-                    n_custom = 0
-                    ls = []
-                    w = In.PENALTIES["custom"]
-                    for name, v in penalties["custom"].items():
-                        y = self.Value(v)  # TODO
-                        if y != 0:
-                            n_custom += y
-                            ls.append(name)
-                    if not ls:
-                        ls.append("none")
-                    total_custom = n_custom * w
-                    print(f"Custom ({n_custom}*{w}={total_custom}): {', '.join(ls)}")
-                    total += total_custom
-
-                    n_nice = 0
-                    ls = []
-                    w = In.PENALTIES["nice"]
-                    for name, v in penalties["nice"].items():
-                        y = self.Value(v)  # TODO
-                        if y != 0:
-                            n_nice += y
-                            ls.append(name)
-                    if not ls:
-                        ls.append("none")
-                    total_nice = n_nice * w
-                    print(f"Nice: ({n_nice}*{w}={total_nice}): {', '.join(ls)}")
-                    total += total_nice
-
-                    print("Students:")
-                    total_students = 0
-                    happiness_sum = 0
-                    happiness_count = 0
-                    students_hh = {}  # Happiness Histogram
-                    for S, d in penalties["student"].items():
-                        ls = []
-                        s = 0
-                        courses_wanted = 0
-                        courses_bad = 0
-                        for p, v in d.items():
-                            courses_wanted += 1
-                            y = self.Value(v)  # TODO have all values in R?
-                            if y > 0:
-                                courses_bad += 1
-                                total_students += y
-                                ls.append((p, y))
-                                s += y
-                        courses_good = courses_wanted - courses_bad
-                        happiness = int(courses_good / courses_wanted * 100)
-                        hh_item = students_hh.get(happiness, [])
-                        hh_item.append(S)
-                        students_hh[happiness] = hh_item
-                        happiness_sum += happiness
-                        happiness_count += 1
-
-                    for v in sorted(students_hh.keys()):
-                        print(
-                            f" * {v:>3}%: {len(students_hh[v]):>3} ({' '.join(students_hh[v])})"
-                        )
-                    total_students = total_students * In.PENALTIES["student"] // 100
-                    if happiness_count:
-                        print(
-                            f"Students total: {total_students} ({happiness_sum // happiness_count}%)"
-                        )
-                    total += total_students
-
-                if utilization:
-                    print("UTILIZATION:")
-                    tn = {}
-                    # for t in range(len(In.teachers)):
-                    # tn[In.teachers[t]] = sum(tc[t,c] for c in range(len(In.courses)))
-                    for T in In.teachers:
-                        tn[T] = sum(
-                            tc[In.Teachers[T], c] for c in range(len(In.courses))
-                        )
-                    for v in sorted(set(tn.values())):
-                        print(f"{v}: {', '.join(t for t in tn if tn[t] == v)}")
-                print(f"TOTAL: {total}")
-
-                if objective and objective != total:
-                    warn(
-                        f"Mismatch of objective value: objective {objective} vs. total {total}"
-                    )  # FIXME
-
-            debug(pprint.pformat(R))
-            print_solution(R, M.penalties_analysis, objective=self.ObjectiveValue())
-            print()
 
     def solve(self):
-        self.print_stats()
-        print()
+        if VERBOSE:
+            self.print_stats()
+            print()
+        else:
+            info(f"Solving...")
 
         solver = cp_model.CpSolver()
         # solver.parameters.max_time_in_seconds = 20.0
-        status = solver.SolveWithSolutionCallback(
-            self.model, self.ContinuousSolutionPrinter(self, self.In)
-        )
+        if VERBOSE:
+            status = solver.SolveWithSolutionCallback(
+                self.model, self.ContinuousSolutionPrinter(self, self.In)
+            )
+        else:
+            status = solver.Solve(self.model)
+            print("SOLVED")
+            print_solution(solver, self, self.In)
+            #x = self.ContinuousSolutionPrinter(self, self.In)
+            #x.OnSolutionCallback()
+
         statusname = solver.StatusName(status)
         print(
             f"Solving finished in {solver.WallTime()} seconds with status {status} - {statusname}"
         )
         if statusname not in ["FEASIBLE", "OPTIMAL"]:
             error(f"Solution NOT found - status {statusname}")
+
+def print_solution(sol, model, input_):
+    In = input_
+    M = model
+    R = Result()
+    R.src = {}
+    for s in range(len(In.slots)):
+        for r in range(len(In.rooms)):
+            for c in range(len(In.courses)):
+                R.src[(s, r, c)] = sol.Value(M.src[(s, r, c)])
+    debug(pprint.pformat(R))
+    R.tc = {}
+    R.tc_lead = {}
+    R.tc_follow = {}
+    for t in range(len(In.teachers)):
+        for c in range(len(In.courses)):
+            R.tc[(t, c)] = sol.Value(M.tc[(t, c)])
+            R.tc_lead[(t, c)] = sol.Value(M.tc_lead[(t, c)])
+            R.tc_follow[(t, c)] = sol.Value(M.tc_follow[(t, c)])
+    for P in In.people:
+        p = In.Teachers[P]  # FIXME
+        na = "".join(
+            [
+                "1" if sol.Value(M.ps_na[(p, s)]) else "0"
+                for s in range(len(In.slots))
+            ]
+        )
+        #     ps = "".join(
+        #         [
+        #             "1" if sol.Value(M.ps[(p, s)]) else "0"
+        #             for s in range(len(In.slots))
+        #         ]
+        #     )
+        ts = "".join(
+            [
+                "1" if sol.Value(M.ts[(p, s)]) else "0"
+                for s in range(len(In.slots))
+            ]
+        )
+        os = "".join(
+            [
+                "1" if sol.Value(M.ps_occupied[(p, s)]) else "0"
+                for s in range(len(In.slots))
+            ]
+        )
+        # for s in range(len(slots)):
+        # debug(f"sum(sol.Value(M.cs[(In.Courses[C],s)]) for C in attend_courses)")
+        #    As = "".join(
+        #        [
+        #            "1"
+        #            if any(
+        #                [
+        #                    sol.Value(M.cs[(In.Courses[C])]) == s
+        #                    for C in attend_courses
+        #                ]
+        #            )
+        #            else "0"
+        #            for s in range(len(In.slots))
+        #        ]
+        #    )
+        #    days = "".join(
+        #        [
+        #            "1" if sol.Value(M.pd[(p, d)]) else "0"
+        #            for d in range(len(In.days))
+        #        ]
+        #    )
+        debug(f"PSPD: na {na}")
+        debug(f"PSPD: os {os}")
+        debug(f"PSPD: ts {ts}")
+        # debug(f"PSPD: As {As}")
+        # debug(f"PSPD: ps {ps}")
+        # debug(f"ps/pd analysis: {P :<9} os {os} ts {ts} as {As} ps {ps} na {na} num {sol.Value(M.occupied_num[p])} days {days}")
+    #                m += " slots "
+    #                for s in range(len(In.slots)):
+    #                    if sol.Value(M.ps[(p,s)]):
+    #                        m += "1"
+    #                    else:
+    #                        m += "0"
+    #                m += " num "
+    #                m += f"{sol.Value(M.occupied_num[p])}"
+    #                m += " days "
+    #                for d in range(len(In.days)):
+    #                    if sol.Value(M.pd[(p,d)]):
+    #                        m += "1"
+    #                    else:
+    #                        m += "0"
+    #                debug(m)
+    debug("Courses openness and indices")
+    R.c_active = []
+    R.cs = []
+    for c in range(len(In.courses)):
+        R.c_active.append(sol.Value(M.c_active[c]))
+        debug(
+            f"{In.courses[c]: <30}: {sol.Value(M.c_active[c])} {sol.Value(M.cs[c])}"
+        )
+        R.cs.append(sol.Value(M.cs[c]))
+    R.penalties = M.penalties
+    #            R.penalties = {}
+    #            # FIXME how to access penalties?
+    #            for (name, ls) in M.penalties.items():
+    #                v = sum([sol.Value(p) for p in ls])
+    #                coeff = In.PENALTIES[name]
+    #                R.penalties[name] = (coeff, v)
+    #            R.custom_penalties = {}
+    #            for name, v in M.custom_penalties.items():
+    #                R.custom_penalties[name] = .Value(v)
+    #            R.heavy_penalties = {}
+    #            for name, v in M.heavy_penalties.items():
+    #                R.heavy_penalties[name] = elf.Value(v)
+    print(f"Wall time: {sol.WallTime():.1f}s")
+
+    # print(f"Branches: {s.NumBranches()}")
+    # print(f"Conflicts: {s.NumConflicts()}")
+    def print_solution(R, penalties_analysis, objective=None, utilization=True):
+        src = R.src
+        tc = R.tc
+        tc_lead = R.tc_lead
+        tc_follow = R.tc_follow
+        penalties = R.penalties
+        if objective:
+            print(f"Objective value: {objective}")
+        for s in range(len(In.slots)):
+            for r in range(len(In.rooms)):
+                for c in range(len(In.courses)):
+                    if src[(s, r, c)]:
+                        Ts = []
+                        if In.courses[c] in In.courses_open:
+                            Ts.append("OPEN")
+                        elif In.courses[c] in In.courses_solo:
+                            for t in range(len(In.teachers)):
+                                # if solver.Value(tc[(t,c)]):
+                                if tc[(t, c)]:
+                                    Ts.append(In.teachers[t])
+                                    break
+                        elif In.courses[c] in In.courses_threesome:
+                            for t in range(len(In.teachers)):
+                                # if solver.Value(tc[(t,c)]):
+                                if tc[(t, c)]:
+                                    Ts.append(In.teachers[t])
+                            assert len(Ts) == 3
+                        elif In.courses[c] in In.courses_regular:
+                            # t_lead = "UNKNOWN"
+                            # t_follow = "UNKNOWN"
+                            for t in range(len(In.teachers)):
+                                if tc_lead[(t, c)]:
+                                    t_lead = t
+                                if tc_follow[(t, c)]:
+                                    t_follow = t
+                            Ts.append(In.teachers[t_lead])
+                            Ts.append(In.teachers[t_follow])
+                        # if len(Ts) == 2 and (Ts[0] in In.teachers_follow or Ts[1] in In.teachers_lead):
+                        # Ts[0], Ts[1] = Ts[1], Ts[0]
+                        if len(Ts) == 2:
+                            Ts_print = f"{Ts[0]:<10}+ {Ts[1]}"
+                        elif len(Ts) == 3:
+                            Ts_print = f"{Ts[0]}+{Ts[1]}+{Ts[2]}"  # TODO
+                        else:
+                            Ts_print = f"{Ts[0]}"
+                        # print(f"{In.slots[s]: <11}{In.rooms[r]: <5}{'+'.join(Ts): <19}{In.courses[c]}")
+                        print(
+                            f"  {In.slots[s]: <11}{In.rooms[r]: <4}{Ts_print: <22}{In.courses[c]}"
+                        )
+        if penalties:
+            print("PENALTIES:")
+            total = 0
+
+            n_heavy = 0
+            ls = []
+            w = In.PENALTIES["heavy"]
+            for name, v in penalties["heavy"].items():
+                y = sol.Value(v)  # TODO
+                if y != 0:
+                    n_heavy += y
+                    ls.append(name)
+            if not ls:
+                ls.append("none")
+            total_heavy = n_heavy * w
+            print(f"Heavy ({n_heavy}*{w}={total_heavy}): {', '.join(ls)}")
+            total += total_heavy
+
+            n_very_heavy = 0
+            ls = []
+            w = In.PENALTIES["very_heavy"]
+            for name, v in penalties["very_heavy"].items():
+                y = sol.Value(v)  # TODO
+                if y != 0:
+                    n_very_heavy += y
+                    ls.append(name)
+            if not ls:
+                ls.append("none")
+            total_very_heavy = n_very_heavy * w
+            print(
+                f"VERY Heavy ({n_very_heavy}*{w}={total_very_heavy}): {', '.join(ls)}"
+            )
+            total += total_very_heavy
+
+            total_teachers = 0
+            print("Teachers:")
+            teachers_happy = []
+            # FIXME
+            for T, d in penalties["teacher"].items():
+                ls = []
+                s = 0
+                for p, v in d.items():
+                    y = sol.Value(v)  # TODO have all values in R?
+                    if y > 0:
+                        total_teachers += y
+                        ls.append((p, y))
+                        s += y
+                if s:
+                    details = ", ".join([f"{x[0]}:{x[1]}" for x in ls])
+                    print(f" * {T}: {s} // {details}")
+                else:
+                    debug(f" * {T} is happy")
+                    teachers_happy.append(T)
+            print(
+                f" Happy teachers: ({len(teachers_happy)}) {', '.join(teachers_happy)}"
+            )
+            print(f"Teachers total: {total_teachers}")
+            total += total_teachers
+
+            n_closed = sol.Value(penalties["courses_closed"])
+            w = In.PENALTIES["courses_closed"]
+            total_closed = n_closed * w
+            print(f"Closed courses: {n_closed}*{w}={total_closed}")
+            total += total_closed
+
+            n_custom = 0
+            ls = []
+            w = In.PENALTIES["custom"]
+            for name, v in penalties["custom"].items():
+                y = sol.Value(v)  # TODO
+                if y != 0:
+                    n_custom += y
+                    ls.append(name)
+            if not ls:
+                ls.append("none")
+            total_custom = n_custom * w
+            print(f"Custom ({n_custom}*{w}={total_custom}): {', '.join(ls)}")
+            total += total_custom
+
+            n_nice = 0
+            ls = []
+            w = In.PENALTIES["nice"]
+            for name, v in penalties["nice"].items():
+                y = sol.Value(v)  # TODO
+                if y != 0:
+                    n_nice += y
+                    ls.append(name)
+            if not ls:
+                ls.append("none")
+            total_nice = n_nice * w
+            print(f"Nice: ({n_nice}*{w}={total_nice}): {', '.join(ls)}")
+            total += total_nice
+
+            print("Students:")
+            total_students = 0
+            happiness_sum = 0
+            happiness_count = 0
+            students_hh = {}  # Happiness Histogram
+            for S, d in penalties["student"].items():
+                ls = []
+                s = 0
+                courses_wanted = 0
+                courses_bad = 0
+                for p, v in d.items():
+                    courses_wanted += 1
+                    y = sol.Value(v)  # TODO have all values in R?
+                    if y > 0:
+                        courses_bad += 1
+                        total_students += y
+                        ls.append((p, y))
+                        s += y
+                courses_good = courses_wanted - courses_bad
+                happiness = int(courses_good / courses_wanted * 100)
+                hh_item = students_hh.get(happiness, [])
+                hh_item.append(S)
+                students_hh[happiness] = hh_item
+                happiness_sum += happiness
+                happiness_count += 1
+
+            for v in sorted(students_hh.keys()):
+                print(
+                    f" * {v:>3}%: {len(students_hh[v]):>3} ({' '.join(students_hh[v])})"
+                )
+            total_students = total_students * In.PENALTIES["student"] // 100
+            if happiness_count:
+                print(
+                    f"Students total: {total_students} ({happiness_sum // happiness_count}%)"
+                )
+            total += total_students
+
+        if utilization:
+            print("UTILIZATION:")
+            tn = {}
+            # for t in range(len(In.teachers)):
+            # tn[In.teachers[t]] = sum(tc[t,c] for c in range(len(In.courses)))
+            for T in In.teachers:
+                tn[T] = sum(
+                    tc[In.Teachers[T], c] for c in range(len(In.courses))
+                )
+            for v in sorted(set(tn.values())):
+                print(f"{v}: {', '.join(t for t in tn if tn[t] == v)}")
+        print(f"TOTAL: {total}")
+
+        if objective and objective != total:
+            warn(
+                f"Mismatch of objective value: objective {objective} vs. total {total}"
+            )  # FIXME
+
+    debug(pprint.pformat(R))
+    print_solution(R, M.penalties_analysis, objective=sol.ObjectiveValue())
+    print()
 
 
 # The worst argument parser in the history of argument parsers, maybe ever.

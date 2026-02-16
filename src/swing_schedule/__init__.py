@@ -4,6 +4,7 @@ from swing_schedule.swing_schedule import (
     parse as parse,
     stop as stop,
     info as info,
+    warn as warn,
     debug as debug,
     main as main,
 )
